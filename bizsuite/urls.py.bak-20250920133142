@@ -1,0 +1,31 @@
+﻿from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+# Only import the helper that actually exists
+from ledger.views_email import email_invoice
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+
+    path("api/inventory/", include("inventory.urls")),
+    path("api/ledger/", include("ledger.urls")),
+    path("api/reports/", include("reports.urls")),
+
+    # Email invoice helper endpoint
+    path("api/ledger/invoices/<int:pk>/email/", email_invoice, name="invoice-email"),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+
+
+
+

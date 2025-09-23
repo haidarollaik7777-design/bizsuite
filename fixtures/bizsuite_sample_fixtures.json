@@ -1,0 +1,106 @@
+[
+  {
+    "model": "common.company",
+    "pk": 1,
+    "fields": {
+      "name": "Demo Co",
+      "currency": "USD"
+    }
+  },
+  {
+    "model": "common.partner",
+    "pk": 1,
+    "fields": {
+      "company": 1,
+      "name": "Acme Customer",
+      "email": "customer@example.com",
+      "is_customer": true,
+      "is_supplier": false
+    }
+  },
+  {
+    "model": "common.partner",
+    "pk": 2,
+    "fields": {
+      "company": 1,
+      "name": "Beta Supplier",
+      "email": "supplier@example.com",
+      "is_customer": false,
+      "is_supplier": true
+    }
+  },
+  {
+    "model": "ledger.account",
+    "pk": 1,
+    "fields": {
+      "company": 1,
+      "code": "1100",
+      "name": "Inventory",
+      "type": "ASSET",
+      "is_reconcilable": false
+    }
+  },
+  {
+    "model": "ledger.account",
+    "pk": 2,
+    "fields": {
+      "company": 1,
+      "code": "5100",
+      "name": "COGS",
+      "type": "EXPENSE",
+      "is_reconcilable": false
+    }
+  },
+  {
+    "model": "ledger.account",
+    "pk": 3,
+    "fields": {
+      "company": 1,
+      "code": "1200",
+      "name": "Accounts Receivable",
+      "type": "ASSET",
+      "is_reconcilable": true
+    }
+  },
+  {
+    "model": "ledger.account",
+    "pk": 5,
+    "fields": {
+      "company": 1,
+      "code": "4000",
+      "name": "Sales Revenue",
+      "type": "INCOME",
+      "is_reconcilable": false
+    }
+  },
+  {
+    "model": "inventory.warehouse",
+    "pk": 1,
+    "fields": {
+      "company": 1,
+      "name": "Main"
+    }
+  },
+  {
+    "model": "inventory.product",
+    "pk": 1,
+    "fields": {
+      "company": 1,
+      "sku": "SKU-001",
+      "name": "Demo Widget",
+      "barcode": "SKU-001",
+      "image": null
+    }
+  },
+  {
+    "model": "inventory.stocklot",
+    "pk": 1,
+    "fields": {
+      "company": 1,
+      "product": 1,
+      "warehouse": 1,
+      "quantity_remaining": "10.00",
+      "unit_cost": "5.0000"
+    }
+  }
+]
