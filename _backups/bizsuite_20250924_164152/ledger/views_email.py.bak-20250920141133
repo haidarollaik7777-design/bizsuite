@@ -1,0 +1,51 @@
+﻿from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.core.mail import EmailMessage
+from django.conf import settings
+import urllib.request
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def email_invoice(request, pk: int):
+    data = request.data or {}
+    to = data.get('to') or 'test@inbox.local'
+    subject = data.get('subject') or f'Invoice #{pk}'
+    message = data.get('message') or 'See attached invoice.'
+
+    pdf_bytes = b''
+    err = None
+
+    # Try to fetch the real PDF through the existing endpoint using the caller's JWT
+    try:
+        auth = request.META.get('HTTP_AUTHORIZATION', '')
+        hdrs = {'Authorization': auth} if auth else {}
+        req = urllib.request.Request(f'http://127.0.0.1:8000/api/ledger/invoices/{pk}/pdf/', headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            pdf_bytes = resp.read()
+    except Exception as e:
+        err = str(e)
+
+    # Fallback: minimal valid PDF so we can test end-to-end even if the real PDF endpoint isn't ready
+    if not pdf_bytes:
+        pdf_bytes = (b'%PDF-1.4\n'
+                     b'1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n'
+                     b'2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n'
+                     b'3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]/Contents 4 0 R>>endobj\n'
+                     b'4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 72 120 Td (Hello MailHog PDF) Tj ET\nendstream\nendobj\n'
+                     b'xref\n0 5\n0000000000 65535 f \n0000000010 00000 n \n0000000060 00000 n \n0000000112 00000 n \n0000000220 00000 n \n'
+                     b'trailer<</Size 5/Root 1 0 R>>\nstartxref\n320\n%%EOF')
+
+    msg = EmailMessage(subject, message, settings.DEFAULT_FROM_EMAIL, [to])
+    msg.attach(f'invoice_{pk}.pdf', pdf_bytes, 'application/pdf')
+    sent = msg.send()
+
+    return Response({
+        'status': 'sent' if sent else 'failed',
+        'attached_bytes': len(pdf_bytes),
+        'to': to,
+        'used_fallback_pdf': err is not None,
+        'backend': settings.EMAIL_BACKEND
+    })

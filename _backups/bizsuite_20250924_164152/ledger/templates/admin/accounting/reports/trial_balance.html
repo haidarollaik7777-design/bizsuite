@@ -1,0 +1,62 @@
+﻿{% extends "admin/base_site.html" %}
+{% block content %}
+<h1 style="margin-bottom:12px;">Trial Balance</h1>
+
+<form method="get" class="form-row" style="margin-bottom:12px; display:flex; gap:.5rem; align-items:end;">
+  {% if form.company %}
+    <div>
+      <label>Company</label><br>
+      {{ form.company }}
+    </div>
+  {% endif %}
+  <div>
+    <label>From</label><br>
+    {{ form.date_from }}
+  </div>
+  <div>
+    <label>To</label><br>
+    {{ form.date_to }}
+  </div>
+  <div>
+    <label>Account (optional)</label><br>
+    {{ form.account }}
+  </div>
+  <div>
+    <button type="submit" class="button">Filter</button>
+    <a href="?{% if request.GET %}{{ request.GET.urlencode }}&{% endif %}export=csv" class="button">Export CSV</a>
+  </div>
+</form>
+
+<table class="grp-table" style="min-width:720px;">
+  <thead>
+    <tr>
+      <th style="text-align:left;">Code</th>
+      <th style="text-align:left;">Account</th>
+      <th style="text-align:right;">Debit</th>
+      <th style="text-align:right;">Credit</th>
+      <th style="text-align:right;">Balance</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.code }}</td>
+        <td>{{ r.name }}</td>
+        <td style="text-align:right;">{{ r.dr|floatformat:2 }}</td>
+        <td style="text-align:right;">{{ r.cr|floatformat:2 }}</td>
+        <td style="text-align:right;">{{ r.balance|floatformat:2 }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5"><em>No data</em></td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <th colspan="2" style="text-align:right;">Totals</th>
+      <th style="text-align:right;">{{ total_dr|floatformat:2 }}</th>
+      <th style="text-align:right;">{{ total_cr|floatformat:2 }}</th>
+      <th style="text-align:right;">{{ total_diff|floatformat:2 }}</th>
+    </tr>
+  </tfoot>
+</table>
+{% endblock %}

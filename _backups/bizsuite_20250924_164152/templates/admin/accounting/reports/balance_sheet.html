@@ -1,0 +1,48 @@
+﻿{% extends "admin/base_site.html" %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  <form method="get" style="margin-bottom:1rem">
+    <label>To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
+    <button class="button" type="submit">Apply</button>
+    <a class="button" href="?">Clear</a>
+    <a class="button" href="?date_to={{ date_to|date:'Y-m-d' }}&format=csv">Export CSV</a>
+  </form>
+
+  <h2>Assets</h2>
+  <table class="listtable">
+    <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
+    <tbody>
+      {% for r in assets %}
+        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance }}</td></tr>
+      {% empty %}
+        <tr><td colspan="3">No rows</td></tr>
+      {% endfor %}
+      <tr><th colspan="2">Total Assets</th><th style="text-align:right">{{ tot_assets }}</th></tr>
+    </tbody>
+  </table>
+
+  <h2>Liabilities</h2>
+  <table class="listtable">
+    <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
+    <tbody>
+      {% for r in liabilities %}
+        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance }}</td></tr>
+      {% empty %}
+        <tr><td colspan="3">No rows</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Equity</h2>
+  <table class="listtable">
+    <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
+    <tbody>
+      {% for r in equity %}
+        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance }}</td></tr>
+      {% empty %}
+        <tr><td colspan="3">No rows</td></tr>
+      {% endfor %}
+      <tr><th colspan="2">Total Liabilities + Equity</th><th style="text-align:right">{{ tot_liab_equity }}</th></tr>
+    </tbody>
+  </table>
+{% endblock %}

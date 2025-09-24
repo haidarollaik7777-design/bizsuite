@@ -1,0 +1,40 @@
+﻿{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<form method="get" class="module" style="padding:10px;margin-bottom:12px;">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    {{ form.company.label_tag }} {{ form.company }}
+    {{ form.date_from.label_tag }} {{ form.date_from }}
+    {{ form.date_to.label_tag }} {{ form.date_to }}
+    <button class="button" type="submit">Apply</button>
+    <a class="button" href="?{% if form.company.value %}company={{ form.company.value }}&{% endif %}{% if form.date_from.value %}date_from={{ form.date_from.value }}&{% endif %}{% if form.date_to.value %}date_to={{ form.date_to.value }}&{% endif %}export=csv">Export CSV</a>
+  </div>
+</form>
+
+<table class="listing">
+  <thead>
+    <tr><th>Code</th><th>Account</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Balance</th></tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.code }}</td>
+      <td>{{ r.name }}</td>
+      <td style="text-align:right;">{{ r.dr|floatformat:2 }}</td>
+      <td style="text-align:right;">{{ r.cr|floatformat:2 }}</td>
+      <td style="text-align:right;">{{ r.balance|floatformat:2 }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5">No data.</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <th colspan="2" style="text-align:right;">TOTAL</th>
+      <th style="text-align:right;">{{ total_dr|floatformat:2 }}</th>
+      <th style="text-align:right;">{{ total_cr|floatformat:2 }}</th>
+      <th style="text-align:right;">{{ total_diff|floatformat:2 }}</th>
+    </tr>
+  </tfoot>
+</table>
+{% endblock %}

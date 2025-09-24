@@ -1,0 +1,157 @@
+﻿<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>BizSuite API Browser Test</title>
+  <style>
+    body { font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 24px; max-width: 860px; margin: auto; }
+    input, button, select { font: inherit; padding: 6px 10px; margin: 4px 0; }
+    code { background:#f5f5f5; padding:2px 6px; border-radius:4px }
+    .ok { color: #0a7; }
+    .bad { color: #c00; }
+    .row { margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>BizSuite – Browser Test</h1>
+
+  <div class="row">
+    <label>API Base:</label>
+    <input id="base" size="40" value="http://127.0.0.1:8000/api">
+  </div>
+
+  <h2>1) Login (JWT)</h2>
+  <div class="row">
+    <input id="user" placeholder="username" value="admin">
+    <input id="pass" placeholder="password" type="password" value="Admin!12345">
+    <button id="btnLogin">Login</button>
+    <span id="loginMsg"></span>
+  </div>
+
+  <h2>2) List Invoices</h2>
+  <div class="row">
+    <button id="btnList">Load invoices</button>
+    <span id="listMsg"></span>
+  </div>
+  <div class="row">
+    <label>Invoice:</label>
+    <select id="selInv"></select>
+    <button id="btnPdf">Download PDF</button>
+    <span id="pdfMsg"></span>
+  </div>
+
+  <script>
+  const $ = sel => document.querySelector(sel);
+  let token = null;
+
+  const parseFilename = (cd) => {
+    if (!cd) return null;
+    // handle: attachment; filename="invoice_7.pdf"
+    const m = cd.match(/filename\*?=([^;]+)/i);
+    if (m) {
+      let v = m[1].trim();
+      v = v.replace(/^UTF-8''/, '');
+      v = v.replace(/^"(.*)"$/, '$1');
+      try { return decodeURIComponent(v); } catch { return v; }
+    }
+    return null;
+  };
+
+  const authHeader = () => token ? { 'Authorization': 'Bearer ' + token } : {};
+
+  $('#btnLogin').onclick = async () => {
+    $('#loginMsg').textContent = '…';
+    $('#loginMsg').className = '';
+    try {
+      const base = $('#base').value;
+      const r = await fetch(base + '/auth/token/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Origin': location.origin },
+        body: JSON.stringify({ username: $('#user').value, password: $('#pass').value })
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      token = j.access;
+      $('#loginMsg').textContent = 'OK';
+      $('#loginMsg').className = 'ok';
+    } catch (e) {
+      $('#loginMsg').textContent = 'Login failed: ' + e.message;
+      $('#loginMsg').className = 'bad';
+    }
+  };
+
+  $('#btnList').onclick = async () => {
+    $('#listMsg').textContent = '…';
+    $('#listMsg').className = '';
+    $('#selInv').innerHTML = '';
+    try {
+      const base = $('#base').value;
+      const r = await fetch(base + '/ledger/invoices/', {
+        headers: { ...authHeader(), 'Origin': location.origin }
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      const list = Array.isArray(j) ? j : (j.results || []);
+      if (!list.length) {
+        $('#listMsg').textContent = 'No invoices – creating one…';
+        const r2 = await fetch(base + '/ledger/invoices/', {
+          method: 'POST',
+          headers: { ...authHeader(), 'Content-Type': 'application/json', 'Origin': location.origin },
+          body: JSON.stringify({
+            company: 1, partner: 1, type: 'OUT',
+            date: new Date().toISOString().slice(0,10),
+            lines: [{ product_name: 'Browser Test', quantity: 1, unit_price: 9.99 }]
+          })
+        });
+        if (!r2.ok) throw new Error('create HTTP ' + r2.status);
+        const created = await r2.json();
+        list.push(created);
+      }
+      list.forEach(inv => {
+        const o = document.createElement('option');
+        o.value = inv.id;
+        o.textContent = `#${inv.id} – ${inv?.partner_name ?? ''} ${inv?.total ?? ''}`;
+        $('#selInv').appendChild(o);
+      });
+      $('#listMsg').textContent = `Loaded ${list.length}`;
+      $('#listMsg').className = 'ok';
+    } catch (e) {
+      $('#listMsg').textContent = 'List failed: ' + e.message;
+      $('#listMsg').className = 'bad';
+    }
+  };
+
+  $('#btnPdf').onclick = async () => {
+    $('#pdfMsg').textContent = '…';
+    $('#pdfMsg').className = '';
+    try {
+      const base = $('#base').value;
+      const id = $('#selInv').value;
+      if (!id) throw new Error('Pick an invoice first.');
+      const r = await fetch(`${base}/ledger/invoices/${id}/pdf/`, {
+        headers: { ...authHeader(), 'Origin': location.origin }
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const cd = r.headers.get('Content-Disposition');
+      const name = parseFilename(cd) || `invoice_${id}.pdf`;
+      const blob = await r.blob();
+
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      a.remove();
+
+      $('#pdfMsg').textContent = `Downloaded ${name}`;
+      $('#pdfMsg').className = 'ok';
+    } catch (e) {
+      $('#pdfMsg').textContent = 'PDF failed: ' + e.message;
+      $('#pdfMsg').className = 'bad';
+    }
+  };
+  </script>
+</body>
+</html>

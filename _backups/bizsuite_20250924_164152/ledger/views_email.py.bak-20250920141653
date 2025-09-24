@@ -1,0 +1,32 @@
+﻿from django.conf import settings
+from django.core.mail import EmailMessage
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import JWTAuthentication
+import urllib.request
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def email_invoice(request, pk: int):
+    data = request.data or {}
+    to = data.get('to') or 'test@inbox.local'
+    subject = data.get('subject') or f'Invoice #{pk}'
+    message = data.get('message') or 'See attached invoice.'
+
+    # Fetch the real PDF using the caller's JWT header
+    auth = request.META.get('HTTP_AUTHORIZATION', '')
+    headers = {'Authorization': auth} if auth else {}
+    req = urllib.request.Request(f'http://127.0.0.1:8000/api/ledger/invoices/{pk}/pdf/', headers=headers)
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        pdf_bytes = resp.read()
+    if not pdf_bytes:
+        return Response({'status': 'failed', 'error': 'Empty PDF from generator'}, status=502)
+
+    msg = EmailMessage(subject, message, settings.DEFAULT_FROM_EMAIL, [to])
+    msg.attach(f'invoice_{pk}.pdf', pdf_bytes, 'application/pdf')
+    sent = msg.send()
+    return Response({'status': 'sent' if sent else 'failed', 'bytes': len(pdf_bytes), 'to': to, 'subject': subject})

@@ -1,0 +1,11 @@
+﻿{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Reports</h1>
+<ul class="object-tools">
+  <li><a class="button" href="/admin/ledger/reportcenterproxy/trial-balance/">Trial Balance</a></li>
+  <li><a class="button" href="/admin/ledger/reportcenterproxy/general-ledger/">General Ledger</a></li>
+  <li><a class="button" href="/admin/ledger/reportcenterproxy/balance-sheet/">Balance Sheet</a></li>
+  <li><a class="button" href="/admin/ledger/reportcenterproxy/income-statement/">Income Statement</a></li>
+</ul>
+<p>Open any report above. Each supports filters and CSV export.</p>
+{% endblock %}

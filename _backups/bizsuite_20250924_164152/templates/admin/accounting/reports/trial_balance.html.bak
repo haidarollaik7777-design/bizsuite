@@ -1,0 +1,33 @@
+﻿{% extends "admin/base_site.html" %}
+{% load report_extras %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  <form method="get" style="margin-bottom:1rem">
+    <label>From: <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label>
+    <label style="margin-left:1rem">To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
+    <button class="button" type="submit">Apply</button>
+    <a class="button" href="?">Clear</a>
+    <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}format=csv">Export CSV</a>
+  </form>
+
+  <table class="listtable">
+    <thead>
+      <tr><th>Code</th><th>Name</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.code }}</td>
+          <td>{{ r.name }}</td>
+          <td style="text-align:right">{{ r.debit|money }}</td>
+          <td style="text-align:right">{{ r.credit|money }}</td>
+          <td style="text-align:right">{{ r.balance|money }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No data.</td></tr>
+      {% endfor %}
+      <tr><th colspan="2">TOTALS</th><th style="text-align:right">{{ tot_deb|money }}</th><th style="text-align:right">{{ tot_cr|money }}</th><th style="text-align:right">{{ (tot_deb|add:-tot_cr)|money }}</th></tr>
+    </tbody>
+  </table>
+{% endblock %}
+

@@ -1,0 +1,11 @@
+﻿{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Reports</h1>
+<ul class="object-tools">
+  <li><a class="button" href="{% url 'admin:ledger_trial_balance' %}">Trial Balance</a></li>
+  <li><a class="button" href="{% url 'admin:ledger_general_ledger' %}">General Ledger</a></li>
+  <li><a class="button" href="{% url 'admin:ledger_balance_sheet' %}">Balance Sheet</a></li>
+  <li><a class="button" href="{% url 'admin:ledger_income_statement' %}">Income Statement</a></li>
+</ul>
+<p>Each report supports filters; TB/GL also have CSV export.</p>
+{% endblock %}

@@ -1,0 +1,256 @@
+﻿from reports.views import report_center_proxy
+from django.contrib import admin
+from django.urls import path, reverse
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
+from django.utils.encoding import smart_str
+from decimal import Decimal
+import csv
+
+from django.db.models import Sum, Value as V, DecimalField
+from django.db.models.functions import Coalesce
+
+
+from django.apps import apps
+from django.conf import settings
+from decimal import Decimal
+from django.db.models import Sum, Value as V, DecimalField
+from django.db.models.functions import Coalesce
+
+def _fmt(x):
+    try:
+        return f"{Decimal(x):,.2f}"
+    except Exception:
+        return str(x)
+
+def _resolve_model_and_fields():
+    """
+    Returns: (Model, account_field, debit_field, credit_field, date_lookup)
+    Picks ledger.JournalLine if present; else settings.REPORTS_POSTING.
+    date_lookup is "date" or "entry__date" or None.
+    """
+    Model = None
+    account_field = "account"; debit_field = "debit"; credit_field = "credit"; date_lookup = "date"
+    try:
+        Model = apps.get_model("ledger", "JournalLine")
+    except Exception:
+        Model = None
+
+    if Model is None:
+        conf = getattr(settings, "REPORTS_POSTING", None) or {}
+        mpath = conf.get("model", "")
+        if not mpath or "." not in mpath:
+            return None, account_field, debit_field, credit_field, None
+        app_label, model_name = mpath.split(".")
+        try:
+            Model = apps.get_model(app_label, model_name)
+        except Exception:
+            return None, account_field, debit_field, credit_field, None
+        account_field = conf.get("account", account_field)
+        debit_field  = conf.get("debit",  debit_field)
+        credit_field = conf.get("credit", credit_field)
+        date_lookup  = conf.get("date",   "date")
+
+    # If the model has no "date" but has a related "entry.date", fall back
+    model_fields = {f.name for f in getattr(Model, "_meta", []).fields} if hasattr(Model, "_meta") else set()
+    if "date" not in model_fields:
+        # try entry__date
+        try:
+            Model._meta.get_field("entry")
+            date_lookup = "entry__date"
+        except Exception:
+            date_lookup = None
+    return Model, account_field, debit_field, credit_field, date_lookup
+# util: filter by date_from/date_to (optional)
+def _filter_qs(request, base_qs):
+    df = request.GET.get("date_from")
+    dt = request.GET.get("date_to")
+    if df:
+        base_qs = base_qs.filter(date__gte=df)
+    if dt:
+        base_qs = base_qs.filter(date__lte=dt)
+    return base_qs, df, dt
+
+# ---- Trial Balance (placeholder) ----
+def report_trial_balance(request):
+    Model, account_field, debit_field, credit_field, date_lookup = _resolve_model_and_fields()
+    if Model is None:
+        return HttpResponse("Cannot resolve posting model for Trial Balance.", status=500)
+
+    qs = Model.objects.all()
+    df = request.GET.get("date_from"); dt = request.GET.get("date_to")
+    try:
+        if date_lookup and df: qs = qs.filter(**{f"{date_lookup}__gte": df})
+        if date_lookup and dt: qs = qs.filter(**{f"{date_lookup}__lte": dt})
+    except Exception:
+        pass
+
+    code_path = f"{account_field}__code"
+    name_path = f"{account_field}__name"
+    ann = qs.values(code_path, name_path).annotate(
+        dr = Coalesce(Sum(debit_field),  V(Decimal("0.00")), output_field=DecimalField(max_digits=18, decimal_places=2)),
+        cr = Coalesce(Sum(credit_field), V(Decimal("0.00")), output_field=DecimalField(max_digits=18, decimal_places=2)),
+    ).order_by(code_path)
+
+    rows = []; tot_deb = Decimal("0"); tot_cr = Decimal("0")
+    for a in ann:
+        code = str(a.get(code_path) or "")
+        name = a.get(name_path) or ""
+        if not code: 
+            continue
+        bal = (a["dr"] or Decimal("0")) - (a["cr"] or Decimal("0"))
+        debit_col  = bal if bal > 0 else Decimal("0")
+        credit_col = -bal if bal < 0 else Decimal("0")
+        rows.append({"code": code, "name": name, "debit": _fmt(debit_col), "credit": _fmt(credit_col), "balance": _fmt(bal)})
+        tot_deb += debit_col; tot_cr += credit_col
+
+    # CSV support
+    if (request.GET.get("format") or "").lower() == "csv":
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{smart_str("trial_balance.csv")}"'
+        import csv as _csv
+        w = _csv.writer(resp)
+        w.writerow(["code","name","debit","credit","balance"])
+        for r in rows:
+            w.writerow([r["code"], r["name"], r["debit"], r["credit"], r["balance"]])
+        w.writerow(["","TOTALS", _fmt(tot_deb), _fmt(tot_cr), _fmt(tot_deb - tot_cr)])
+        return resp
+
+    return render(request, "admin/accounting/reports/trial_balance.html", {
+        **admin.site.each_context(request),
+        "title":"Trial Balance",
+        "rows": rows, "tot_deb": _fmt(tot_deb), "tot_cr": _fmt(tot_cr),
+        "date_from": df, "date_to": dt
+    }),
+        cr = Coalesce(Sum("credit"), V(Decimal("0.00")), output_field=DecimalField(max_digits=18, decimal_places=2)),
+    ).order_by("account__code")
+
+    assets = []; liab = []; equity = []
+    tot_assets = Decimal("0"); tot_liab = Decimal("0"); tot_equity = Decimal("0")
+
+    for a in ann:
+        code = str(a["account__code"] or "")
+        if not code: 
+            continue
+        name = a["account__name"]
+        bal  = (a["dr"] or Decimal("0")) - (a["cr"] or Decimal("0"))  # debit - credit
+        head = code.strip()[0]
+        row = {"code": code, "name": name, "balance": bal}
+        if head == "1":       # Assets
+            assets.append(row); tot_assets += bal
+        elif head == "2":     # Liabilities (show as positive number customary)
+            liab.append(row);  tot_liab   += (-bal if bal < 0 else bal)
+        elif head == "3":     # Equity
+            equity.append(row); tot_equity += (-bal if bal < 0 else bal)
+
+    # CSV export
+    if (request.GET.get("format") or "").lower() == "csv":
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{smart_str("balance_sheet.csv")}"'
+        writer = csv.writer(resp)
+        writer.writerow(["section","code","name","amount"])
+        for r in assets: writer.writerow(["Assets", r["code"], r["name"], f"{r['balance']}"])
+        writer.writerow(["Totals","","Total Assets", f"{tot_assets}"])
+        for r in liab:   writer.writerow(["Liabilities", r["code"], r["name"], f"{r['balance']}"])
+        for r in equity: writer.writerow(["Equity", r["code"], r["name"], f"{r['balance']}"])
+        writer.writerow(["Totals","","Total Liabilities + Equity", f"{tot_liab + tot_equity}"])
+        return resp
+
+    ctx = {
+        **admin.site.each_context(request),
+        "title": "Balance Sheet",
+        "date_from": date_from, "date_to": date_to,
+        "assets": assets, "liabilities": liab, "equity": equity,
+        "tot_assets": tot_assets, "tot_liab": tot_liab, "tot_equity": tot_equity,
+        "tot_liab_equity": tot_liab + tot_equity,
+    }
+    return render(request, "admin/accounting/reports/balance_sheet.html", ctx)
+
+# ---- Income Statement (HTML + CSV) ----
+def report_income_statement(request):
+    from ledger.models import JournalLine
+    qs, date_from, date_to = _filter_qs(request, JournalLine.objects.all())
+
+    ann = qs.values("account__code","account__name").annotate(
+        dr = Coalesce(Sum("debit"),  V(Decimal("0.00")), output_field=DecimalField(max_digits=18, decimal_places=2)),
+        cr = Coalesce(Sum("credit"), V(Decimal("0.00")), output_field=DecimalField(max_digits=18, decimal_places=2)),
+    ).order_by("account__code")
+
+    revenue = []; expense = []
+    tot_rev = Decimal("0"); tot_exp = Decimal("0")
+
+    for a in ann:
+        code = str(a["account__code"] or "")
+        if not code:
+            continue
+        name = a["account__name"]
+        dr = a["dr"] or Decimal("0")
+        cr = a["cr"] or Decimal("0")
+        head = code.strip()[0]
+        if head == "4":  # Revenue (credit balances)
+            amt = cr - dr
+            revenue.append({"code": code, "name": name, "amount": amt})
+            tot_rev += amt
+        elif head == "5":  # Expense (debit balances)
+            amt = dr - cr
+            expense.append({"code": code, "name": name, "amount": amt})
+            tot_exp += amt
+
+    net = tot_rev - tot_exp
+
+    # CSV export
+    if (request.GET.get("format") or "").lower() == "csv":
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{smart_str("income_statement.csv")}"'
+        writer = csv.writer(resp)
+        writer.writerow(["section","code","name","amount"])
+        for r in revenue: writer.writerow(["Revenue", r["code"], r["name"], f"{r['amount']}"])
+        writer.writerow(["Totals","","Total Revenue", f"{tot_rev}"])
+        for r in expense: writer.writerow(["Expense", r["code"], r["name"], f"{r['amount']}"])
+        writer.writerow(["Totals","","Total Expenses", f"{tot_exp}"])
+        writer.writerow(["Totals","","Net Income", f"{net}"])
+        return resp
+
+    ctx = {
+        **admin.site.each_context(request),
+        "title": "Income Statement",
+        "date_from": date_from, "date_to": date_to,
+        "revenue": revenue, "expense": expense,
+        "tot_rev": tot_rev, "tot_exp": tot_exp, "net_income": net,
+    }
+    return render(request, "admin/accounting/reports/income_statement.html", ctx)
+
+def rc_dispatch(request, report_id):
+    """Redirect /admin/rc/<slug> to the explicit report routes, preserving querystring."""
+    slug_to_name = {
+        "trial-balance": "ledger_trial_balance",
+        "general-ledger": "ledger_general_ledger",
+        "balance-sheet": "ledger_balance_sheet",
+        "income-statement": "ledger_income_statement",
+    }
+    name = slug_to_name.get(report_id)
+    if not name:
+        return HttpResponse(f"Report '{report_id}' not found.", status=404)
+    from django.urls import reverse
+    url = reverse(name)
+    q = request.META.get("QUERY_STRING")
+    if q:
+        url = f"{url}?{q}"
+    return redirect(url)
+urlpatterns = [
+    # collision-free route for the generic table view (kept)
+    path('admin/rc/<slug:report_id>/', rc_dispatch, name='report-center-proxy-rc'),
+
+    # IMPORTANT: our report routes first (so they don't get swallowed by admin/)
+    path("admin/ledger/reportcenterproxy/trial-balance/",     admin.site.admin_view(report_trial_balance),    name="ledger_trial_balance"),
+    path("admin/ledger/reportcenterproxy/general-ledger/",    admin.site.admin_view(report_general_ledger),   name="ledger_general_ledger"),
+    path("admin/ledger/reportcenterproxy/balance-sheet/",     admin.site.admin_view(report_balance_sheet),    name="ledger_balance_sheet"),
+    path("admin/ledger/reportcenterproxy/income-statement/",  admin.site.admin_view(report_income_statement), name="ledger_income_statement"),
+
+    # Keep admin last
+    path("admin/", admin.site.urls),
+]
+
+
+
+

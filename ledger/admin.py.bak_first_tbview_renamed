@@ -1,0 +1,245 @@
+﻿from decimal import Decimal
+from django.contrib import admin
+from django.urls import path
+from django.shortcuts import render
+from django.http import HttpResponse
+from django import forms
+from django.db.models import Sum, Value as V, DecimalField
+from django.db.models.functions import Coalesce, Cast
+import csv
+from django.utils.encoding import smart_str
+
+# Import ledger models directly (NOT from "accounting")
+from .models import ReportCenterProxy, Account, JournalLine, JournalEntry
+
+# Company is optional (if you have common app)
+try:
+    from common.models import Company
+except Exception:
+    Company = None
+
+class ReportFilterForm(forms.Form):
+    if Company:
+        company = forms.ModelChoiceField(queryset=Company.objects.all(), required=False)
+    date_from = forms.DateField(required=False, widget=forms.DateInput(attrs={"type":"date"}))
+    date_to   = forms.DateField(required=False, widget=forms.DateInput(attrs={"type":"date"}))
+    account   = forms.ModelChoiceField(queryset=Account.objects.all(), required=False)
+
+def _filtered_lines(request):
+    """Return JournalLine queryset filtered by form params."""
+    qs = JournalLine.objects.select_related("account","entry").all()
+    form = ReportFilterForm(request.GET or None)
+    if form.is_valid():
+        cd = form.cleaned_data
+        if Company and cd.get("company"):
+            qs = qs.filter(entry__company=cd["company"])
+        if cd.get("date_from"):
+            qs = qs.filter(entry__date__gte=cd["date_from"])
+        if cd.get("date_to"):
+            qs = qs.filter(entry__date__lte=cd["date_to"])
+        if cd.get("account"):
+            qs = qs.filter(account=cd["account"])
+    return form, qs
+
+def tb_view(request, admin_site):
+    form, qs = _filtered_lines(request)
+    pass
+
+    for a in agg:
+        dr=float(a["dr"] or 0); cr=float(a["cr"] or 0)
+        rows.append({"code":a["account__code"],"name":a["account__name"],
+                     "dr":dr,"cr":cr,"balance":dr-cr})
+        tdr+=dr; tcr+=cr
+    if request.GET.get("export") == "csv":
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"]='attachment; filename="trial_balance.csv"'
+        w=csv.writer(resp); w.writerow(["Code","Account","Debit","Credit","Balance"])
+        for r in rows:
+            w.writerow([smart_str(r["code"]), smart_str(r["name"]),
+                        f'{r["dr"]:.2f}', f'{r["cr"]:.2f}', f'{r["balance"]:.2f}'])
+        w.writerow([]); w.writerow(["TOTAL","","{:.2f}".format(tdr),
+                                    "{:.2f}".format(tcr), "{:.2f}".format(tdr-tcr)])
+        return resp
+    ctx = {**admin_site.each_context(request), "title":"Trial Balance",
+           "form":form,"rows":rows,"total_dr":tdr,"total_cr":tcr,"total_diff":tdr-tcr}
+    # If your templates exist, this will render them; else show a tiny fallback page
+    try:
+        return render(request, "admin/accounting/reports/trial_balance.html", ctx)
+    except Exception:
+        html = ["<h1>Trial Balance</h1>",
+                '<form method="get"><input type="date" name="date_from"> '
+                '<input type="date" name="date_to"> '
+                '<button type="submit">Filter</button> '
+                '<a href="?export=csv">Export CSV</a></form>',
+                "<table border=1><tr><th>Code</th><th>Account</th><th>Debit</th><th>Credit</th><th>Balance</th></tr>"]
+        for r in rows:
+            html.append(f"<tr><td>{r['code']}</td><td>{r['name']}</td>"
+                        f"<td>{r['dr']:.2f}</td><td>{r['cr']:.2f}</td><td>{r['balance']:.2f}</td></tr>")
+        html.append(f"<tr><th colspan=2>Total</th><th>{tdr:.2f}</th><th>{tcr:.2f}</th><th>{(tdr-tcr):.2f}</th></tr></table>")
+        return HttpResponse("".join(html))
+
+def gl_view(request, admin_site):
+    form, qs = _filtered_lines(request)
+    entries = qs.order_by("entry__date","id")
+    run=[]; bal=0.0
+    for e in entries:
+        dr=float(getattr(e,'debit',0) or 0); cr=float(getattr(e,'credit',0) or 0)
+        bal += (dr-cr); run.append((e, bal))
+    if request.GET.get("export") == "csv":
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"]='attachment; filename="general_ledger.csv"'
+        w=csv.writer(resp); w.writerow(["Date","Account","Reference","Description","Debit","Credit","Running Balance"])
+        for e,b in run:
+            dt  = getattr(e.entry,'date', '')
+            ref = getattr(e.entry,'reference','') if hasattr(e.entry,'reference') else ''
+            desc= getattr(e,'label','')
+            w.writerow([dt, smart_str(e.account), smart_str(ref), smart_str(desc),
+                        f"{float(getattr(e,'debit',0) or 0):.2f}",
+                        f"{float(getattr(e,'credit',0) or 0):.2f}",
+                        f"{b:.2f}"])
+        return resp
+    ctx = {**admin_site.each_context(request), "title":"General Ledger",
+           "form":form, "rows":run}
+    try:
+        return render(request, "admin/accounting/reports/general_ledger.html", ctx)
+    except Exception:
+        html = ["<h1>General Ledger</h1>",
+                '<form method="get"><input type="date" name="date_from"> '
+                '<input type="date" name="date_to"> '
+                '<button type="submit">Filter</button> '
+                '<a href="?export=csv">Export CSV</a></form>',
+                "<table border=1><tr><th>Date</th><th>Account</th><th>Ref</th><th>Description</th><th>Debit</th><th>Credit</th><th>Running</th></tr>"]
+        for e,b in run:
+            dt  = getattr(e.entry,'date', '')
+            ref = getattr(e.entry,'reference','') if hasattr(e.entry,'reference') else ''
+            desc= getattr(e,'label','')
+            html.append(f"<tr><td>{dt}</td><td>{e.account}</td><td>{ref}</td><td>{desc}</td>"
+                        f"<td>{float(getattr(e,'debit',0) or 0):.2f}</td>"
+                        f"<td>{float(getattr(e,'credit',0) or 0):.2f}</td>"
+                        f"<td>{b:.2f}</td></tr>")
+        html.append("</table>")
+        return HttpResponse("".join(html))
+
+@admin.register(ReportCenterProxy)
+class ReportCenterProxyAdmin(admin.ModelAdmin):
+    change_list_template = "admin/ledger/reportcenterproxy/change_list.html"
+    def has_add_permission(self, *a, **k): return False
+    def has_change_permission(self, *a, **k): return False
+    def has_delete_permission(self, *a, **k): return False
+    def get_urls(self):
+        urls = super().get_urls()
+        return [
+            path("trial-balance/",  self.admin_site.admin_view(lambda r: tb_view(r, self.admin_site)), name="ledger_trial_balance"),
+            path("general-ledger/", self.admin_site.admin_view(lambda r: gl_view(r, self.admin_site)), name="ledger_general_ledger"),
+        ] + urls
+# ==== Auto-register core Ledger models (non-destructive) ====
+from django.apps import apps
+from django.contrib import admin
+
+def _get(model_name):
+    try:
+        return apps.get_model("ledger", model_name)
+    except Exception:
+        return None
+
+_CoreModels = [
+    "Account",
+    "Journal",
+    "JournalEntry",
+    "JournalLine",
+    "Tax",
+    "Invoice",
+    "InvoiceLine",
+]
+
+for _name in _CoreModels:
+    _m = _get(_name)
+    if _m and _m not in admin.site._registry:
+        try:
+            admin.site.register(_m)
+        except admin.sites.AlreadyRegistered:
+            pass
+# ==== /auto-register ====
+# ==== Auto-register all ledger models (except the Reports hub) ====
+from django.apps import apps
+from django.contrib import admin
+
+def _auto_register_ledger_models():
+    try:
+        appcfg = apps.get_app_config("ledger")
+    except Exception:
+        return
+    for m in appcfg.get_models():
+        # Skip the synthetic reports hub models if present
+        if m.__name__ in ("ReportCenterProxy", "ReportCenter"):
+            continue
+        if m not in admin.site._registry:
+            try:
+                admin.site.register(m)
+            except admin.sites.AlreadyRegistered:
+                pass
+
+_auto_register_ledger_models()
+# ==== /auto-register ====
+
+
+def tb_view(request, admin_site):
+    form, qs = _filtered_lines(request)
+    pass
+    rows = []
+    total_dr = Decimal("0.00")
+    total_cr = Decimal("0.00")
+    for a in agg:
+        dr = Decimal(a["dr"] or 0)
+        cr = Decimal(a["cr"] or 0)
+        rows.append({
+            "code": a["account__code"],
+            "name": a["account__name"],
+            "dr": dr,
+            "cr": cr,
+            "balance": dr - cr,
+        })
+        total_dr += dr
+        total_cr += cr
+
+    if request.GET.get("export") == "csv":
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = 'attachment; filename="trial_balance.csv"'
+        w = csv.writer(resp)
+        w.writerow(["Code", "Account", "Debit", "Credit", "Balance"])
+        for r in rows:
+            w.writerow([smart_str(r["code"]), smart_str(r["name"]),
+                        f"{r['dr']:.2f}", f"{r['cr']:.2f}", f"{r['balance']:.2f}"])
+        w.writerow([])
+        w.writerow(["TOTAL", "", f"{total_dr:.2f}", f"{total_cr:.2f}", f"{(total_dr - total_cr):.2f}"])
+        return resp
+
+    ctx = {
+        **admin_site.each_context(request),
+        "title": "Trial Balance",
+        "form": form,
+        "rows": rows,
+        "total_dr": total_dr,
+        "total_cr": total_cr,
+        "total_diff": total_dr - total_cr,
+    }
+    try:
+        return render(request, "admin/accounting/reports/trial_balance.html", ctx)
+    except Exception:
+        # Fallback minimal HTML if template is missing
+        html = ["<h1>Trial Balance</h1>",
+                '<form method="get"><input type="date" name="date_from"> ',
+                '<input type="date" name="date_to"> ',
+                '<button type="submit">Filter</button> ',
+                '<a href="?export=csv">Export CSV</a></form>',
+                "<table border=1><tr><th>Code</th><th>Account</th><th>Debit</th><th>Credit</th><th>Balance</th></tr>"]
+        for r in rows:
+            html.append(
+                f"<tr><td>{r['code']}</td><td>{r['name']}</td>"
+                f"<td>{r['dr']:.2f}</td><td>{r['cr']:.2f}</td><td>{r['balance']:.2f}</td></tr>"
+            )
+        html.append(
+            f"<tr><th colspan=2>Total</th><th>{total_dr:.2f}</th><th>{total_cr:.2f}</th><th>{(total_dr-total_cr):.2f}</th></tr></table>"
+        )
+        return HttpResponse(''.join(html))
+

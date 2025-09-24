@@ -1,0 +1,53 @@
+﻿{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<form method="get" class="module" style="padding:10px;margin-bottom:12px;">
+  <label>From: <input type="date" name="date_from" value="{{ date_from|default_if_none:'' }}"></label>
+  <label style="margin-left:12px;">To: <input type="date" name="date_to" value="{{ date_to|default_if_none:'' }}"></label>
+  <button class="button" style="margin-left:12px;">Apply</button>
+</form>
+
+<div class="columns">
+  <div class="module" style="width:48%; display:inline-block; vertical-align:top;">
+    <h2>Assets</h2>
+    <table class="listing">
+      <thead><tr><th>Code</th><th>Name</th><th style="text-align:right;">Balance</th></tr></thead>
+      <tbody>
+        {% for r in assets %}
+          <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right;">{{ r.balance }}</td></tr>
+        {% empty %}
+          <tr><td colspan="3"><em>No rows</em></td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr><th colspan="2">Total Assets</th><th style="text-align:right;">{{ tot_assets }}</th></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="module" style="width:48%; display:inline-block; vertical-align:top; margin-left:2%;">
+    <h2>Liabilities</h2>
+    <table class="listing">
+      <thead><tr><th>Code</th><th>Name</th><th style="text-align:right;">Balance</th></tr></thead>
+      <tbody>
+        {% for r in liabilities %}
+          <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right;">{{ r.balance }}</td></tr>
+        {% empty %}
+          <tr><td colspan="3"><em>No rows</em></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2 style="margin-top:16px;">Equity</h2>
+    <table class="listing">
+      <thead><tr><th>Code</th><th>Name</th><th style="text-align:right;">Balance</th></tr></thead>
+      <tbody>
+        {% for r in equity %}
+          <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right;">{{ r.balance }}</td></tr>
+        {% empty %}
+          <tr><td colspan="3"><em>No rows</em></td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr><th colspan="2">Total Liabilities + Equity</th><th style="text-align:right;">{{ tot_liab_equity }}</th></tr></tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

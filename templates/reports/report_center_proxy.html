@@ -1,0 +1,44 @@
+﻿{% extends "admin/base_site.html" %}
+{% load static %}
+{% load report_extras %}
+{% block content %}
+  <h1>{{ title }}</h1>
+
+  <form method="get" style="margin-bottom:1rem">
+    <label>Date from:
+      <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+    </label>
+    <label style="margin-left:1rem">Date to:
+      <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+    </label>
+    <button class="button" type="submit">Apply</button>
+    <a class="button" href="?">Clear</a>
+    <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}format=csv">Export CSV</a>
+  </form>
+
+  <div class="results">
+    <table class="listtable">
+      <thead>
+        <tr>
+          {% for c in columns %}<th>{{ c|title|default:c }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            {% for c in columns %}
+              {% if c == 'amount' or c == 'debit' or c == 'credit' or c == 'balance' %}
+                <td style="text-align:right">{{ r|get_item:c|money }}</td>
+              {% else %}
+                <td>{{ r|get_item:c }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% empty %}
+          <tr><td colspan="{{ columns|length }}">No data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
+

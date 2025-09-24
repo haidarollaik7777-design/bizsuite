@@ -1,0 +1,67 @@
+﻿# reports/report_registry.py
+from typing import Callable, Dict, Any
+
+BUILD_ERRORS = {}
+
+def _error_builder_factory(msg: str) -> Callable[..., Dict[str, Any]]:
+    def _builder(date_from=None, date_to=None):
+        return {
+            "title": "Report Error",
+            "columns": ["error"],
+            "rows": [{"error": msg}],
+            "date_from": date_from,
+            "date_to": date_to,
+        }
+    return _builder
+
+# Try import builders individually so one failure doesn't kill others
+build_trial_balance = build_general_ledger = build_balance_sheet = build_income_statement = None
+
+try:
+    from .reports_financial import build_trial_balance as _tb
+    build_trial_balance = _tb
+except Exception as e:
+    BUILD_ERRORS["trial-balance"] = f"Import error: {e!s}"
+
+try:
+    from .reports_financial import build_general_ledger as _gl
+    build_general_ledger = _gl
+except Exception as e:
+    BUILD_ERRORS["general-ledger"] = f"Import error: {e!s}"
+
+try:
+    from .reports_financial import build_balance_sheet as _bs
+    build_balance_sheet = _bs
+except Exception as e:
+    BUILD_ERRORS["balance-sheet"] = f"Import error: {e!s}"
+
+try:
+    from .reports_financial import build_income_statement as _is
+    build_income_statement = _is
+except Exception as e:
+    BUILD_ERRORS["income-statement"] = f"Import error: {e!s}"
+
+def _builder_or_error(slug: str, fallback_title: str, fn):
+    if fn is not None:
+        return {"title": fallback_title, "builder": fn}
+    msg = BUILD_ERRORS.get(slug, "Unknown import problem.")
+    return {"title": fallback_title, "builder": _error_builder_factory(msg)}
+
+REPORTS = {
+    "trial-balance": {
+        **_builder_or_error("trial-balance", "Trial Balance", build_trial_balance),
+        "csv_filename": "trial_balance.csv",
+    },
+    "general-ledger": {
+        **_builder_or_error("general-ledger", "General Ledger", build_general_ledger),
+        "csv_filename": "general_ledger.csv",
+    },
+    "balance-sheet": {
+        **_builder_or_error("balance-sheet", "Balance Sheet", build_balance_sheet),
+        "csv_filename": "balance_sheet.csv",
+    },
+    "income-statement": {
+        **_builder_or_error("income-statement", "Income Statement", build_income_statement),
+        "csv_filename": "income_statement.csv",
+    },
+}

@@ -1,0 +1,17 @@
+﻿{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Reports</h1>
+<ul class="object-tools">
+  <li><a class="button" href="{% url 'admin:ledger_trial_balance_proxy' %}">Trial Balance</a></li>
+  <li><a class="button" href="{% url 'admin:ledger_general_ledger_proxy' %}">General Ledger</a></li>
+  {% url 'admin:accounting_balance_sheet' as bs_url %}
+  {% if bs_url %}
+    <li><a class="button" href="{{ bs_url }}">Balance Sheet</a></li>
+  {% endif %}
+  {% url 'admin:accounting_income_statement' as is_url %}
+  {% if is_url %}
+    <li><a class="button" href="{{ is_url }}">Income Statement</a></li>
+  {% endif %}
+</ul>
+<p>Open any report above. Each supports filters and CSV export.</p>
+{% endblock %}

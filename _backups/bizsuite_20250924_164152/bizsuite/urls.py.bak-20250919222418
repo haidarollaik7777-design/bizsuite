@@ -1,0 +1,70 @@
+﻿from ledger.views_email import email_invoice, email_voucher, email_waybill
+from ledger.views_waybill_pdf import waybill_pdf
+from ledger.views_voucher_pdf import voucher_pdf
+from django.views.generic import RedirectView
+from ledger.views_pdf import invoice_pdf
+from .api_root import api_root
+from ledger.views_pdf import invoice_pdf
+
+from django.http import JsonResponse
+from ledger.views_pdf import invoice_pdf
+
+def home(_request):
+    return JsonResponse({"status": "ok", "app": "BizSuite", "api": "/api/"})
+from django.contrib import admin
+from ledger.views_pdf import invoice_pdf
+from django.urls import path, include
+from ledger.views_pdf import invoice_pdf
+from django.conf import settings
+from ledger.views_pdf import invoice_pdf
+from django.conf.urls.static import static
+from ledger.views_pdf import invoice_pdf
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from ledger.views_pdf import invoice_pdf
+
+urlpatterns = [
+    path('api/maintenance/', include('maintenance.urls')),
+    path('api/ledger/invoices/<int:pk>/pdf/', invoice_pdf, name='invoice-pdf'),
+path('api/ledger/invoices/<int:pk>/email/', email_invoice, name='invoice-email'),
+path('api/ledger/vouchers/<int:pk>/pdf/', voucher_pdf, name='voucher-pdf'),
+path('api/ledger/vouchers/<int:pk>/email/', email_voucher, name='voucher-email'),
+path('api/ledger/waybills/<int:pk>/pdf/', waybill_pdf, name='waybill-pdf'),
+path('api/ledger/waybills/<int:pk>/email/', email_waybill, name='waybill-email'),
+    path('api', RedirectView.as_view(url='/api/', permanent=False)),  # /api -> /api/
+path('api/', api_root, name='api-root'),
+
+    path('', home),
+    path('admin/', admin.site.urls),
+    path('api/auth/token/', TokenObtainPairView.as_view()),
+    path('api/auth/refresh/', TokenRefreshView.as_view()),
+    path('api/inventory/', include('inventory.api')),
+    path('api/ledger/', include('ledger.api')),
+    path('api/reports/', include('reports.api')),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+
+
+
+# --- BizSuite extra endpoints (appended) ---
+try:
+    from django.urls import path
+    from ledger.views_email import email_invoice
+    from ledger.views_pdf import invoice_pdf
+
+    urlpatterns += [
+        path("api/ledger/invoices/<int:pk>/email/", email_invoice, name="invoice-email"),
+        path("api/ledger/invoices/<int:pk>/pdf/",   invoice_pdf,   name="invoice-pdf"),
+    ]
+except Exception as _e:
+    # Keep the rest of URL config working even if optional modules are missing
+    pass
+# --- end extra ---
+# --- Test page route (appended safely) ---
+try:
+    from django.urls import path
+    from .views_test import test_invoices
+    urlpatterns += [ path("test/invoices/", test_invoices, name="test-invoices") ]
+except Exception as _e:
+    pass
+# --- end test route ---

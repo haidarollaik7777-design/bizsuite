@@ -1,0 +1,13 @@
+﻿{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+  {{ block.super }}
+  {% if original and post_url %}
+    <li>
+      <a href="{{ post_url }}" class="historylink" style="background:#2563eb;color:#fff;border-radius:4px;padding:6px 10px;">
+        {% trans "Post to Ledger" %}
+      </a>
+    </li>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,218 @@
+﻿<!doctype html>
+<meta charset="utf-8" />
+<title>BizSuite – API Tester</title>
+<style>
+  :root{--fg:#0c1321;--muted:#6b7280;--ok:#106a39;--err:#b91c1c;--bg:#0b1220;--card:#111827;--line:#1f2937}
+  html,body{background:#0b1220;color:#e5e7eb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;line-height:1.35}
+  .wrap{max-width:980px;margin:32px auto;padding:0 16px}
+  h1{font-weight:700;margin:0 0 12px}
+  .card{background:#111827;border:1px solid #1f2937;border-radius:12px;margin:16px 0;padding:16px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row > *{flex:1 1 220px}
+  label{display:block;font-size:12px;color:#9ca3af;margin:8px 0 4px}
+  input,textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #374151;background:#0b1220;color:#e5e7eb}
+  textarea{min-height:80px;resize:vertical}
+  button{padding:10px 14px;border-radius:10px;border:1px solid #374151;background:#0b1220;color:#e5e7eb;cursor:pointer}
+  button:hover{background:#0f172a}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #374151;font-size:12px;margin-left:8px}
+  .ok{color:#86efac;border-color:#166534}
+  .err{color:#fecaca;border-color:#7f1d1d}
+  pre{background:#0b1220;border:1px solid #1f2937;border-radius:8px;padding:12px;overflow:auto}
+  a.link{color:#93c5fd}
+</style>
+
+<div class="wrap">
+  <h1>BizSuite – API Tester</h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Base URL</label>
+        <input id="base" value="http://127.0.0.1:8000/api" />
+      </div>
+      <div>
+        <label>Username</label>
+        <input id="user" value="admin" />
+      </div>
+      <div>
+        <label>Password</label>
+        <input id="pass" value="Admin!12345" type="password" />
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <button id="btnLogin">1) Login (JWT)</button>
+      <span id="loginStatus" class="pill">Not logged in</span>
+      <button id="btnCopyToken" title="Copy token to clipboard">Copy token</button>
+    </div>
+    <label style="margin-top:10px">Access token</label>
+    <input id="token" readonly />
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Reports</h3>
+    <div class="row">
+      <div>
+        <label>As of (Trial Balance)</label>
+        <input id="asof" type="date" />
+      </div>
+      <div>
+        <label>Start (P&amp;L)</label>
+        <input id="start" type="date" />
+      </div>
+      <div>
+        <label>End (P&amp;L)</label>
+        <input id="end" type="date" />
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button id="btnTB">2) Trial Balance</button>
+      <button id="btnPL">3) Profit &amp; Loss</button>
+    </div>
+    <label style="margin-top:10px">Response</label>
+    <pre id="outReports"></pre>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Invoice Email &amp; PDF</h3>
+    <div class="row">
+      <div>
+        <label>Invoice ID</label>
+        <input id="invId" type="number" value="1" />
+      </div>
+      <div>
+        <label>To</label>
+        <input id="mailto" value="test@inbox.local" />
+      </div>
+      <div>
+        <label>Subject</label>
+        <input id="mailsub" value="Invoice test" />
+      </div>
+    </div>
+    <label>Message</label>
+    <textarea id="mailmsg">Please find your invoice attached.</textarea>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button id="btnSend">Send Invoice Email</button>
+      <button id="btnPDF">Fetch Invoice PDF</button>
+      <span id="pdfStatus" class="pill">No PDF fetched</span>
+      <a id="pdfLink" class="link" target="_blank" style="display:none">Open fetched PDF</a>
+    </div>
+    <label style="margin-top:10px">Result</label>
+    <pre id="outMail"></pre>
+  </div>
+</div>
+
+<script>
+const $ = sel => document.querySelector(sel);
+const now = new Date();
+const yyyy = now.getFullYear();
+const pad = n => String(n).padStart(2,'0');
+const today = `${yyyy}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+$("#asof").value = today;
+$("#end").value  = today;
+$("#start").value= `${yyyy}-01-01`;
+
+function setStatus(el, text, ok){
+  el.textContent = text;
+  el.className = "pill " + (ok===true ? "ok" : ok===false ? "err" : "");
+}
+
+function authHeaders(){
+  const t = $("#token").value.trim();
+  return t ? { "Authorization": "Bearer " + t } : {};
+}
+
+async function login(){
+  setStatus($("#loginStatus"), "Logging in...");
+  $("#token").value = "";
+  try{
+    const r = await fetch($("#base").value + "/auth/token/", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ username: $("#user").value, password: $("#pass").value })
+    });
+    const j = await r.json();
+    if(!r.ok){ throw new Error(j.detail || r.statusText); }
+    $("#token").value = j.access || "";
+    setStatus($("#loginStatus"), "OK", true);
+  }catch(err){
+    setStatus($("#loginStatus"), "Login failed", false);
+    alert("Login error: " + err.message);
+  }
+}
+
+async function callGet(path, outEl){
+  outEl.textContent = "Loading...";
+  try{
+    const r = await fetch($("#base").value + path, { headers: authHeaders() });
+    const txt = await r.text();
+    try { outEl.textContent = JSON.stringify(JSON.parse(txt), null, 2); }
+    catch { outEl.textContent = txt; }
+  }catch(err){
+    outEl.textContent = "Error: " + err.message;
+  }
+}
+
+$("#btnLogin").onclick = login;
+$("#btnCopyToken").onclick = async () => {
+  try { await navigator.clipboard.writeText($("#token").value); alert("Token copied."); }
+  catch(e){ alert("Copy failed: " + e.message); }
+};
+
+$("#btnTB").onclick = () => callGet(`/reports/trial-balance/?as_of=${encodeURIComponent($("#asof").value)}`, $("#outReports"));
+
+$("#btnPL").onclick = () => callGet(`/reports/profit-loss/?start=${encodeURIComponent($("#start").value)}&end=${encodeURIComponent($("#end").value)}`, $("#outReports"));
+
+$("#btnSend").onclick = async () => {
+  $("#outMail").textContent = "Sending...";
+  try{
+    const r = await fetch($("#base").value + `/ledger/invoices/${encodeURIComponent($("#invId").value)}/email/`, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", ...authHeaders() },
+      body: JSON.stringify({
+        to: $("#mailto").value,
+        subject: $("#mailsub").value,
+        message: $("#mailmsg").value
+      })
+    });
+    const txt = await r.text();
+    try { $("#outMail").textContent = JSON.stringify(JSON.parse(txt), null, 2); }
+    catch { $("#outMail").textContent = txt; }
+  }catch(err){
+    $("#outMail").textContent = "Error: " + err.message;
+  }
+};
+
+$("#btnPDF").onclick = async () => {
+  setStatus($("#pdfStatus"), "Fetching...");
+  $("#pdfLink").style.display = "none";
+  $("#outMail").textContent = "";
+  try{
+    // DO NOT set Accept header explicitly to avoid DRF 406; default is */* which is fine
+    const r = await fetch($("#base").value + `/ledger/invoices/${encodeURIComponent($("#invId").value)}/pdf/`, {
+      headers: authHeaders()
+    });
+    if(!r.ok){
+      const t = await r.text();
+      setStatus($("#pdfStatus"), "HTTP " + r.status, false);
+      $("#outMail").textContent = t;
+      return;
+    }
+    const blob = await r.blob();
+    const bytes = await blob.arrayBuffer();
+    const u8 = new Uint8Array(bytes);
+    const head = Array.from(u8.slice(0,5)).map(c=>String.fromCharCode(c)).join('');
+    const hex  = Array.from(u8.slice(0,16)).map(c=>c.toString(16).padStart(2,'0')).join(' ');
+    const isPDF = head === "%PDF-";
+    setStatus($("#pdfStatus"), (isPDF? "Looks like PDF":"Not PDF") + `; ${u8.length} bytes`, isPDF);
+    $("#outMail").textContent = `Bytes: ${u8.length}\nHead: ${JSON.stringify(head)}\nHex: ${hex}\nContent-Type: ${r.headers.get('content-type')}`;
+    const url = URL.createObjectURL(blob);
+    const a = $("#pdfLink");
+    a.href = url;
+    a.style.display = "inline";
+    a.textContent = "Open fetched PDF";
+  }catch(err){
+    setStatus($("#pdfStatus"), "Error", false);
+    $("#outMail").textContent = "Error: " + err.message;
+  }
+};
+</script>
