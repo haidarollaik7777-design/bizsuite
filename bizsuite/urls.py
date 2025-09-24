@@ -13,6 +13,7 @@ from django.apps import apps
 from django.conf import settings
 from django.db.models import Sum, Value as V, DecimalField
 from django.db.models.functions import Coalesce
+from reports.exporters import gl_xlsx, tb_xlsx, bs_xlsx, is_xlsx
 
 # ------------ helpers ------------
 
@@ -539,22 +540,10 @@ urlpatterns = [
     path("admin/ledger/reportcenterproxy/income-statement/",  admin.site.admin_view(report_income_statement), name="ledger_income_statement"),
     path("admin/ledger/reportcenterproxy/<slug:report_id>/",  rc_compat, name="report-center-proxy-compat"),
     path("admin/rc/<slug:report_id>/",                        rc_dispatch, name="report-center-proxy-rc"),
+        path('admin/rcx/general-ledger.xlsx',    admin.site.admin_view(gl_xlsx), name='export_gl_xlsx'),
+    path('admin/rcx/trial-balance.xlsx',     admin.site.admin_view(tb_xlsx), name='export_tb_xlsx'),
+    path('admin/rcx/balance-sheet.xlsx',     admin.site.admin_view(bs_xlsx), name='export_bs_xlsx'),
+    path('admin/rcx/income-statement.xlsx',  admin.site.admin_view(is_xlsx), name='export_is_xlsx'),
     path("admin/", admin.site.urls),
 ]
-
-from reports.exporters import gl_xlsx, tb_xlsx, bs_xlsx, is_xlsx
-try:
-    urlpatterns += [
-        path('admin/rcx/general-ledger.xlsx',    admin.site.admin_view(gl_xlsx), name='export_gl_xlsx'),
-        path('admin/rcx/trial-balance.xlsx',     admin.site.admin_view(tb_xlsx), name='export_tb_xlsx'),
-        path('admin/rcx/balance-sheet.xlsx',     admin.site.admin_view(bs_xlsx), name='export_bs_xlsx'),
-        path('admin/rcx/income-statement.xlsx',  admin.site.admin_view(is_xlsx), name='export_is_xlsx'),
-    ]
-except NameError:
-    urlpatterns = [
-        path('admin/rcx/general-ledger.xlsx',    admin.site.admin_view(gl_xlsx), name='export_gl_xlsx'),
-        path('admin/rcx/trial-balance.xlsx',     admin.site.admin_view(tb_xlsx), name='export_tb_xlsx'),
-        path('admin/rcx/balance-sheet.xlsx',     admin.site.admin_view(bs_xlsx), name='export_bs_xlsx'),
-        path('admin/rcx/income-statement.xlsx',  admin.site.admin_view(is_xlsx), name='export_is_xlsx'),
-    ]
 

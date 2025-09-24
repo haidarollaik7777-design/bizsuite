@@ -557,3 +557,5 @@ except NameError:
         path('admin/rcx/balance-sheet.xlsx',     admin.site.admin_view(bs_xlsx), name='export_bs_xlsx'),
         path('admin/rcx/income-statement.xlsx',  admin.site.admin_view(is_xlsx), name='export_is_xlsx'),
     ]
+
+
