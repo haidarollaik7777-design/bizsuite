@@ -6,13 +6,19 @@
     <label style="margin-left:1rem">To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
     <button class="button" type="submit">Apply</button>
     <a class="button" href="?">Clear</a>
-    <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&format=csv">Export CSV</a>
+    <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&format=csv">Export CSV</a> <a class="button" href="/admin/rcx/trial-balance.xlsx{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}">Export XLSX</a>
   </form>
   <table class="listtable">
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead>
     <tbody>
       {% for r in rows %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.debit }}</td><td style="text-align:right">{{ r.credit }}</td><td style="text-align:right">{{ r.balance }}</td></tr>
+        <tr>
+          <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&account_code={{ r.code }}">{{ r.code }}</a></td>
+          <td>{{ r.name }}</td>
+          <td style="text-align:right">{{ r.debit }}</td>
+          <td style="text-align:right">{{ r.credit }}</td>
+          <td style="text-align:right">{{ r.balance }}</td>
+        </tr>
       {% empty %}
         <tr><td colspan="5">No data.</td></tr>
       {% endfor %}
@@ -20,3 +26,4 @@
     </tbody>
   </table>
 {% endblock %}
+

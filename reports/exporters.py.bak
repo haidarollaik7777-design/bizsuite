@@ -1,0 +1,105 @@
+﻿from io import BytesIO
+from decimal import Decimal
+from django.http import HttpResponse
+from django.apps import apps
+from django.conf import settings
+from django.db.models import Sum, Value as V, DecimalField
+from django.db.models.functions import Coalesce
+from openpyxl import Workbook
+
+def _resolve_model_and_fields():
+    Model = None
+    account_field, debit_field, credit_field, date_lookup = "account","debit","credit","date"
+    try:
+        Model = apps.get_model("ledger","JournalLine")
+    except Exception:
+        Model = None
+    if Model is None:
+        conf = getattr(settings, "REPORTS_POSTING", {}) or {}
+        mpath = conf.get("model","")
+        if "." in mpath:
+            app_label, model_name = mpath.split(".")
+            try: Model = apps.get_model(app_label, model_name)
+            except Exception: Model = None
+        account_field = conf.get("account", account_field)
+        debit_field   = conf.get("debit",  debit_field)
+        credit_field  = conf.get("credit", credit_field)
+        date_lookup   = conf.get("date",   date_lookup)
+    if Model is None:
+        return None, account_field, debit_field, credit_field, None
+    try:
+        fn = {f.name for f in Model._meta.get_fields()}
+    except Exception:
+        fn = set()
+    if "date" not in fn and "entry" in fn:
+        date_lookup = "entry__date"
+    elif "date" not in fn:
+        date_lookup = None
+    return Model, account_field, debit_field, credit_field, date_lookup
+
+def _apply_filters(request, qs, date_lookup, account_field):
+    df = request.GET.get("date_from"); dt = request.GET.get("date_to")
+    acc_code = request.GET.get("account_code") or request.GET.get("code") or ""
+    try:
+        if date_lookup and df: qs = qs.filter(**{f"{date_lookup}__gte": df})
+        if date_lookup and dt: qs = qs.filter(**{f"{date_lookup}__lte": dt})
+        if acc_code: qs = qs.filter(**{f"{account_field}__code__startswith": acc_code})
+    except Exception:
+        pass
+    return qs
+
+def _wb_response(wb, filename):
+    bio = BytesIO(); wb.save(bio); bio.seek(0)
+    resp = HttpResponse(bio.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+def gl_xlsx(request):
+    Model, account_field, debit_field, credit_field, date_lookup = _resolve_model_and_fields()
+    if Model is None: return HttpResponse("Posting model not found", status=500)
+    try:
+        qs = Model.objects.select_related(account_field, "entry")
+    except Exception:
+        qs = Model.objects.all()
+    qs = _apply_filters(request, qs, date_lookup, account_field)
+    for ob in (["date","id"], [f"{date_lookup}","id"] if date_lookup else [], ["id"]):
+        try:
+            if ob: qs = qs.order_by(*ob); break
+        except Exception: continue
+    from openpyxl import Workbook
+    wb = Workbook(); ws = wb.active; ws.title = "General Ledger"
+    ws.append(["Date","Code","Name","Debit","Credit","Memo"])
+    for obj in qs:
+        acct = getattr(obj, account_field, None)
+        code = getattr(acct, "code", ""); name = getattr(acct, "name", "")
+        memo = getattr(obj, "memo", "") or getattr(obj, "label", "") or ""
+        dval = getattr(obj, "date", None)
+        if not dval:
+            ent = getattr(obj, "entry", None); dval = getattr(ent, "date", "")
+        dr = getattr(obj, debit_field, Decimal("0")) or Decimal("0")
+        cr = getattr(obj, credit_field, Decimal("0")) or Decimal("0")
+        ws.append([dval, code, name, float(dr), float(cr), memo])
+    return _wb_response(wb, "general_ledger.xlsx")
+
+def tb_xlsx(request):
+    Model, account_field, debit_field, credit_field, date_lookup = _resolve_model_and_fields()
+    if Model is None: return HttpResponse("Posting model not found", status=500)
+    qs = _apply_filters(request, Model.objects.all(), date_lookup, account_field)
+    code_path = f"{account_field}__code"; name_path = f"{account_field}__name"
+    ann = qs.values(code_path, name_path).annotate(
+        dr=Coalesce(Sum(debit_field), V(Decimal("0.00")), output_field=DecimalField(max_digits=18, decimal_places=2)),
+        cr=Coalesce(Sum(credit_field),V(Decimal("0.00")), output_field=DecimalField(max_digits=18, decimal_places=2)),
+    ).order_by(code_path)
+    wb = Workbook(); ws = wb.active; ws.title="Trial Balance"
+    ws.append(["Code","Name","Debit","Credit","Balance"])
+    tot_dr = tot_cr = Decimal("0")
+    for a in ann:
+        code = str(a.get(code_path) or ""); name = a.get(name_path) or ""
+        if not code: continue
+        bal = (a["dr"] or Decimal("0")) - (a["cr"] or Decimal("0"))
+        debit_col  = bal if bal > 0 else Decimal("0")
+        credit_col = -bal if bal < 0 else Decimal("0")
+        tot_dr += debit_col; tot_cr += credit_col
+        ws.append([code, name, float(debit_col), float(credit_col), float(bal)])
+    ws.append(["","TOTALS", float(tot_dr), float(tot_cr), float(tot_dr - tot_cr)])
+    return _wb_response(wb, "trial_balance.xlsx")

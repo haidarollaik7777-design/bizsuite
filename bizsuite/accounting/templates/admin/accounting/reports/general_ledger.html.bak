@@ -8,7 +8,7 @@
     {{ form.date_from.label_tag }} {{ form.date_from }}
     {{ form.date_to.label_tag }} {{ form.date_to }}
     <button class="button" type="submit">Apply</button>
-    <a class="button" href="?{% if form.company.value %}company={{ form.company.value }}&{% endif %}{% if form.account.value %}account={{ form.account.value }}&{% endif %}{% if form.date_from.value %}date_from={{ form.date_from.value }}&{% endif %}{% if form.date_to.value %}date_to={{ form.date_to.value }}&{% endif %}export=csv">Export CSV</a> <a class="button" href="/admin/rcx/general-ledger.xlsx{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}">Export XLSX</a> <a class="button" href="/admin/ledger/reportcenterproxy/general-ledger/?format=xlsx">Export XLSX (new)</a>
+    <a class="button" href="?{% if form.company.value %}company={{ form.company.value }}&{% endif %}{% if form.account.value %}account={{ form.account.value }}&{% endif %}{% if form.date_from.value %}date_from={{ form.date_from.value }}&{% endif %}{% if form.date_to.value %}date_to={{ form.date_to.value }}&{% endif %}export=csv">Export CSV</a> <a class="button" href="/admin/ledger/reportcenterproxy/general-ledger/?format=xlsx">Export XLSX (new)</a>
   </div>
 </form>
 
@@ -33,5 +33,4 @@
   </tbody>
 </table>
 {% endblock %}
-
 

@@ -6,7 +6,7 @@
     <label style="margin-left:1rem">To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
     <button class="button" type="submit">Apply</button>
     <a class="button" href="?">Clear</a>
-    <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&format=csv">Export CSV</a>
+    <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&format=csv">Export CSV</a> <a class="button" href="/admin/rcx/income-statement.xlsx{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}">Export XLSX</a>
   </form>
 
   <h2>Revenue</h2>
@@ -14,10 +14,8 @@
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Amount</th></tr></thead>
     <tbody>
       {% for r in revenue %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.amount }}</td></tr>
-      {% empty %}
-        <tr><td colspan="3">No rows</td></tr>
-      {% endfor %}
+        <tr><td><a href="/admin/ledger/reportcenterproxy/general-ledger/?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&account_code={{ r.code }}">{{ r.code }}</a></td><td>{{ r.name }}</td><td style="text-align:right">{{ r.amount }}</td></tr>
+      {% empty %}<tr><td colspan="3">No rows</td></tr>{% endfor %}
       <tr><th colspan="2">Total Revenue</th><th style="text-align:right">{{ tot_rev }}</th></tr>
     </tbody>
   </table>
@@ -27,10 +25,8 @@
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Amount</th></tr></thead>
     <tbody>
       {% for r in expense %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.amount }}</td></tr>
-      {% empty %}
-        <tr><td colspan="3">No rows</td></tr>
-      {% endfor %}
+        <tr><td><a href="/admin/ledger/reportcenterproxy/general-ledger/?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&account_code={{ r.code }}">{{ r.code }}</a></td><td>{{ r.name }}</td><td style="text-align:right">{{ r.amount }}</td></tr>
+      {% empty %}<tr><td colspan="3">No rows</td></tr>{% endfor %}
       <tr><th colspan="2">Total Expenses</th><th style="text-align:right">{{ tot_exp }}</th></tr>
     </tbody>
   </table>
@@ -38,3 +34,4 @@
   <h2>Net Income</h2>
   <p><strong>{{ net_income }}</strong></p>
 {% endblock %}
+

@@ -1,13 +1,11 @@
 ﻿{% extends "admin/base_site.html" %}
-{% load report_extras %}
 {% block content %}
   <h1>{{ title }}</h1>
   <form method="get" style="margin-bottom:1rem">
-    <label>From: <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label>
-    <label style="margin-left:1rem">To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
+    <label>To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
     <button class="button" type="submit">Apply</button>
     <a class="button" href="?">Clear</a>
-    <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endfor %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endfor %}format=csv">Export CSV</a>
+    <a class="button" href="?date_to={{ date_to|date:'Y-m-d' }}&format=csv">Export CSV</a>
   </form>
 
   <h2>Assets</h2>
@@ -15,11 +13,9 @@
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
     <tbody>
       {% for r in assets %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance|money }}</td></tr>
-      {% empty %}
-        <tr><td colspan="3">No rows</td></tr>
-      {% endfor %}
-      <tr><th colspan="2">Total Assets</th><th style="text-align:right">{{ tot_assets|money }}</th></tr>
+        <tr><td><a href="/admin/ledger/reportcenterproxy/general-ledger/?date_to={{ date_to|date:'Y-m-d' }}&account_code={{ r.code }}">{{ r.code }}</a></td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance }}</td></tr>
+      {% empty %}<tr><td colspan="3">No rows</td></tr>{% endfor %}
+      <tr><th colspan="2">Total Assets</th><th style="text-align:right">{{ tot_assets }}</th></tr>
     </tbody>
   </table>
 
@@ -28,10 +24,8 @@
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
     <tbody>
       {% for r in liabilities %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance|money }}</td></tr>
-      {% empty %}
-        <tr><td colspan="3">No rows</td></tr>
-      {% endfor %}
+        <tr><td><a href="/admin/ledger/reportcenterproxy/general-ledger/?date_to={{ date_to|date:'Y-m-d' }}&account_code={{ r.code }}">{{ r.code }}</a></td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance }}</td></tr>
+      {% empty %}<tr><td colspan="3">No rows</td></tr>{% endfor %}
     </tbody>
   </table>
 
@@ -40,13 +34,9 @@
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
     <tbody>
       {% for r in equity %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance|money }}</td></tr>
-      {% empty %}
-        <tr><td colspan="3">No rows</td></tr>
-      {% endfor %}
-      <tr><th colspan="2">Total Liabilities + Equity</th><th style="text-align:right">{{ tot_liab_equity|money }}</th></tr>
+        <tr><td><a href="/admin/ledger/reportcenterproxy/general-ledger/?date_to={{ date_to|date:'Y-m-d' }}&account_code={{ r.code }}">{{ r.code }}</a></td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance }}</td></tr>
+      {% empty %}<tr><td colspan="3">No rows</td></tr>{% endfor %}
+      <tr><th colspan="2">Total Liabilities + Equity</th><th style="text-align:right">{{ tot_liab_equity }}</th></tr>
     </tbody>
   </table>
 {% endblock %}
-
-

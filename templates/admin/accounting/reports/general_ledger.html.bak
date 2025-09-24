@@ -2,13 +2,29 @@
 {% load report_extras %}
 {% block content %}
   <h1>{{ title }}</h1>
-  <form method="get" style="margin-bottom:1rem">
-    <label>From: <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label>
-    <label style="margin-left:1rem">To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
-    <button class="button" type="submit">Apply</button>
-    <a class="button" href="?">Clear</a>
-    <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}format=csv">Export CSV</a>
+  <form method="get" style="margin-bottom:1rem; display:flex; gap:1rem; align-items:end; flex-wrap:wrap">
+    <div>
+      <label>From<br><input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label>
+    </div>
+    <div>
+      <label>To<br><input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
+    </div>
+    <div>
+      <label>Account code (prefix)<br><input type="text" name="account_code" value="{{ account_code }}" placeholder="e.g. 1200"></label>
+    </div>
+    <div>
+      <label>Page size<br><input type="number" min="20" max="1000" name="page_size" value="{{ page_size }}"></label>
+    </div>
+    <div>
+      <button class="button" type="submit">Apply</button>
+      <a class="button" href="?">Clear</a>
+      <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&account_code={{ account_code }}&format=csv">Export CSV</a>
+    </div>
   </form>
+
+  <div style="margin:0.5rem 0">
+    <span>Showing page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong> — {{ total_count }} rows total.</span>
+  </div>
 
   <table class="listtable">
     <thead>
@@ -29,4 +45,9 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <div style="margin-top:1rem; display:flex; gap:0.5rem">
+    {% if has_prev %}<a class="button" href="{{ prev_qs }}">◀ Prev</a>{% endif %}
+    {% if has_next %}<a class="button" href="{{ next_qs }}">Next ▶</a>{% endif %}
+  </div>
 {% endblock %}
