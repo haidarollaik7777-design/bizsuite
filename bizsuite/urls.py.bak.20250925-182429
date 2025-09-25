@@ -1,5 +1,4 @@
-from reports import views as report_views
-from django.views.generic.base import RedirectView
+﻿from django.views.generic.base import RedirectView
 from django.urls import path, include
 from django.contrib import admin
 from django.urls import path, reverse
@@ -429,8 +428,6 @@ def rc_dispatch(request, report_id):
 
 # ---------- routes ----------
 urlpatterns = [
-    path('admin/rcx/<slug:report_id>.csv', report_views.export_csv_dispatch, name='rcx_csv'),
-    path('admin/rcx/<slug:report_id>.xlsx', report_views.export_xlsx_dispatch, name='rcx_xlsx'),
     path('admin/rcx/trial-balance.xlsx', RedirectView.as_view(url='/admin/ledger/reportcenterproxy/trial-balance/?format=xlsx', query_string=True), name='tb_xlsx_short'),
     path('admin/rcx/general-ledger.xlsx', RedirectView.as_view(url='/admin/ledger/reportcenterproxy/general-ledger/?format=xlsx', query_string=True), name='gl_xlsx_short'),
     path('admin/reports/', include('reports.urls')),

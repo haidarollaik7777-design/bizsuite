@@ -162,27 +162,3 @@ def report_trial_balance(request):
         "total_net": total_net, "balanced": balanced,
     }
     return render(request, "admin/accounting/reports/trial_balance.html", context)
-# ---- Export dispatchers (force format, reuse existing views) ----
-from django.http import Http404
-def _dispatch_export(request, report_id: str, fmt: str):
-    # Map slugs to existing report views
-    mapping = {
-        "general-ledger": report_general_ledger,
-        "trial-balance":  report_trial_balance,
-        # Add others here when available:
-        # "journal":        report_journal,
-        # "account-statement": report_account_statement,
-    }
-    view = mapping.get(report_id)
-    if not view:
-        raise Http404(f"Unknown report: {report_id}")
-    q = request.GET.copy()
-    q["format"] = fmt
-    request.GET = q
-    return view(request)
-
-def export_xlsx_dispatch(request, report_id: str):
-    return _dispatch_export(request, report_id, "xlsx")
-
-def export_csv_dispatch(request, report_id: str):
-    return _dispatch_export(request, report_id, "csv")

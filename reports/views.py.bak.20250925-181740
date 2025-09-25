@@ -1,46 +1,63 @@
-from django.apps import apps
-from django.shortcuts import render, redirect
-from django.utils import timezone
+﻿from django.db.models.functions import Coalesce
 from django.db.models import Sum, Value
-from django.db.models.functions import Coalesce
-
-from .utils.csv_export import rows_to_csv_response, safe_date
+from django.utils import timezone
 from .utils.xlsx_export import rows_to_xlsx_response
+from .utils.csv_export import rows_to_csv_response, safe_date
+# reports/views.py
+from django.contrib.admin.views.decorators import staff_member_required
+from django.http import Http404, HttpResponse
+from django.shortcuts import render
+from django.utils.encoding import smart_str
+from django.views.decorators.http import require_GET
+import csv, importlib
 
-# ---------------- Helpers ----------------
-def _is_csv(request):
-    return (request.GET.get("format") or "").lower() == "csv"
+VALID = {"trial-balance","general-ledger","balance-sheet","income-statement"}
+TITLES = {
+    "trial-balance": "Trial Balance",
+    "general-ledger": "General Ledger",
+    "balance-sheet": "Balance Sheet",
+    "income-statement": "Income Statement",
+}
+CSV_NAMES = {
+    "trial-balance": "trial_balance.csv",
+    "general-ledger": "general_ledger.csv",
+    "balance-sheet": "balance_sheet.csv",
+    "income-statement": "income_statement.csv",
+}
 
-def _want_xlsx(request):
-    return (request.GET.get("format") or "").lower() in ("xlsx", "excel")
+def _error_builder(msg):
+    def _b(date_from=None, date_to=None):
+        return {"title":"Report Error","columns":["error"],"rows":[{"error":msg}],
+                "date_from":date_from,"date_to":date_to}
+    return _b
 
-def _date_range(request):
-    """
-    Parses ?from=YYYY-MM-DD&to=YYYY-MM-DD; defaults to the current month.
-    """
-    today = timezone.now().date()
-    dfrom = request.GET.get("from")
-    dto   = request.GET.get("to")
-    if not dfrom or not dto:
-        import calendar
-        dfrom = today.replace(day=1)
-        last_day = calendar.monthrange(today.year, today.month)[1]
-        dto = today.replace(day=last_day)
-    else:
-        dfrom = safe_date(dfrom, today.replace(day=1))
-        dto   = safe_date(dto, today)
-    return dfrom, dto
+def _builder(slug):
+    try:
+        rf = importlib.import_module("reports.reports_financial")
+    except Exception as e:
+        return _error_builder(f"Import reports_financial failed: {e!s}")
+    name = {
+        "trial-balance":"build_trial_balance",
+        "general-ledger":"build_general_ledger",
+        "balance-sheet":"build_balance_sheet",
+        "income-statement":"build_income_statement",
+    }[slug]
+    fn = getattr(rf, name, None)
+    return fn or _error_builder(f"Builder '{name}' missing in reports/reports_financial.py")
 
-# -------------- (Optional) admin proxy helper --------------
+@staff_member_required
+@require_GET
+
+from django.shortcuts import redirect
+
 def report_center_proxy(request, report_id: str):
     """
     Proxy from admin/ledger/reportcenterproxy/<report_id>/ to our real report URLs.
-    Preserves the query string (?from=&to=&code_prefix=...).
+    Preserves query string (from/to/code_prefix/etc.).
     """
     mapping = {
-        "general-ledger": "/admin/reports/general-ledger/",
         "trial-balance": "/admin/reports/trial-balance/",
-        # Add others if/when implemented:
+        "general-ledger": "/admin/reports/general-ledger/",
         "balance-sheet": "/admin/reports/balance-sheet/",
         "income-statement": "/admin/reports/income-statement/",
     }
@@ -50,8 +67,35 @@ def report_center_proxy(request, report_id: str):
         target = f"{target}?{qs}"
     return redirect(target)
 
-# ---------------- General Ledger ----------------
-def report_general_ledger(request):
+def _is_csv(request):
+    return (request.GET.get("format") or "").lower() == "csv"
+def _want_xlsx(request):
+    return (request.GET.get("format") or "").lower() in ("xlsx", "excel")
+def _date_range(request):
+    """
+    Parses ?from=YYYY-MM-DD&to=YYYY-MM-DD, defaults to current month.
+    """
+    today = timezone.now().date()
+    dfrom = request.GET.get("from")
+    dto   = request.GET.get("to")
+    if not dfrom or not dto:
+        dfrom = today.replace(day=1)
+        if today.month == 12:
+            dto = today.replace(day=31)
+        else:
+            from datetime import timedelta
+            import calendar
+            last_day = calendar.monthrange(today.year, today.month)[1]
+            dto = today.replace(day=last_day)
+    else:
+        dfrom = safe_date(dfrom, today.replace(day=1))
+        dto   = safe_date(dto, today)
+    return dfrom, dto
+
+def request):
+    from django.apps import apps
+    from django.shortcuts import render
+
     JournalLine = apps.get_model("accounting", "JournalLine")
 
     dfrom, dto = _date_range(request)
@@ -67,10 +111,9 @@ def report_general_ledger(request):
     if code_prefix:
         q = q.filter(account__code__startswith=code_prefix)
 
-    q = q.order_by("entry__date", "entry_id", "id").distinct()
+    q = q.order_by("entry__date","entry_id","id").distinct()
 
-    # Export rows
-    headers = ["Date", "Code", "Name", "Debit", "Credit", "Memo"]
+    # Build rows once for exports
     rows = []
     for ln in q:
         rows.append([
@@ -81,6 +124,7 @@ def report_general_ledger(request):
             f"{float(ln.credit or 0):.2f}",
             (ln.memo or ln.entry.memo or "")[:500],
         ])
+    headers = ["Date","Code","Name","Debit","Credit","Memo"]
 
     if _is_csv(request):
         return rows_to_csv_response(f"general_ledger_{dfrom}_to_{dto}", headers, rows)
@@ -96,26 +140,29 @@ def report_general_ledger(request):
     }
     return render(request, "admin/accounting/reports/general_ledger.html", context)
 
-# ---------------- Trial Balance ----------------
-def report_trial_balance(request):
+def request):
+    from django.apps import apps
+    from django.shortcuts import render
+    from django.db.models import Sum, Value
+    from django.db.models.functions import Coalesce
+
     JournalLine = apps.get_model("accounting", "JournalLine")
 
     dfrom, dto = _date_range(request)
     code_prefix = (request.GET.get("code_prefix") or "").strip()
 
-    base = JournalLine.objects.filter(
-        entry__is_posted=True, entry__date__gte=dfrom, entry__date__lte=dto
-    )
+    base = (JournalLine.objects
+            .filter(entry__is_posted=True, entry__date__gte=dfrom, entry__date__lte=dto))
     if code_prefix:
         base = base.filter(account__code__startswith=code_prefix)
 
-    # Aggregate per account
-    period = (base.values("account_id", "account__code", "account__name")
-              .annotate(deb=Coalesce(Sum("debit"), Value(0)),
-                        cre=Coalesce(Sum("credit"), Value(0)))
-              .order_by("account__code"))
+    # Aggregate values per account
+    period = (base.values("account_id","account__code","account__name")
+                 .annotate(deb=Coalesce(Sum("debit"), Value(0)),
+                           cre=Coalesce(Sum("credit"), Value(0)))
+                 .order_by("account__code"))
 
-    # Prepare display & export rows
+    # Prepare display/export rows and totals
     rows_display = []
     rows_export  = []
     total_deb = 0.0
@@ -144,7 +191,7 @@ def report_trial_balance(request):
 
     headers = ["Code", "Name", "Debit", "Credit", "Balance"]
     total_net = total_deb - total_cre
-    balanced = abs(total_net) < 0.005
+    balanced = abs(total_net) < 0.005  # tolerance
 
     if _is_csv(request):
         rows_export.append(["TOTALS", "", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_net:.2f}"])
@@ -155,34 +202,15 @@ def report_trial_balance(request):
         return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows_export)
 
     context = {
-        "rows": rows_display,
+        "rows": rows_display,   # <-- now contains r.balance per row
         "dfrom": dfrom, "dto": dto,
         "code_prefix": code_prefix,
         "total_deb": total_deb, "total_cre": total_cre,
         "total_net": total_net, "balanced": balanced,
     }
     return render(request, "admin/accounting/reports/trial_balance.html", context)
-# ---- Export dispatchers (force format, reuse existing views) ----
-from django.http import Http404
-def _dispatch_export(request, report_id: str, fmt: str):
-    # Map slugs to existing report views
-    mapping = {
-        "general-ledger": report_general_ledger,
-        "trial-balance":  report_trial_balance,
-        # Add others here when available:
-        # "journal":        report_journal,
-        # "account-statement": report_account_statement,
-    }
-    view = mapping.get(report_id)
-    if not view:
-        raise Http404(f"Unknown report: {report_id}")
-    q = request.GET.copy()
-    q["format"] = fmt
-    request.GET = q
-    return view(request)
 
-def export_xlsx_dispatch(request, report_id: str):
-    return _dispatch_export(request, report_id, "xlsx")
 
-def export_csv_dispatch(request, report_id: str):
-    return _dispatch_export(request, report_id, "csv")
+
+
+

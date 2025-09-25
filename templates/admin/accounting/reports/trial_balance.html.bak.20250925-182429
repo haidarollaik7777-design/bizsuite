@@ -1,4 +1,4 @@
-{% extends "admin/base_site.html" %}
+﻿{% extends "admin/base_site.html" %}
 {% load static %}
 
 {% block content %}
@@ -21,7 +21,6 @@
     <button type="submit">Apply</button>
     <a class="button" href="{{ request.path }}">Clear</a>
     <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
-    <a class="button" href="/admin/rcx/trial-balance.xlsx?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}{% if account_id %}&account={{ account_id }}{% endif %}">Export XLSX</a>
     <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=xlsx">Export XLSX</a>
   </div>
 </form>
