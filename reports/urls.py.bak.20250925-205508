@@ -1,12 +1,9 @@
-﻿from django.urls import path
+from django.urls import path
 from . import views
 
 app_name = "reports"
 
 urlpatterns = [
-    path('export/xlsx/income-statement/', views.report_income_statement, name='xlsx_income_statement'),
-    path('export/csv/income-statement/', views.report_income_statement, name='csv_income_statement'),
-    path('income-statement/', views.report_income_statement, name='report_income_statement'),
     # General Ledger
     path("general-ledger/", views.report_general_ledger, name="report_general_ledger"),
     path("export/csv/general-ledger/", views.report_general_ledger, name="csv_general_ledger"),
