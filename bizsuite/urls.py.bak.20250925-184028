@@ -1,5 +1,4 @@
-﻿from django.urls import re_path
-from reports import views as report_views
+﻿from reports import views as report_views
 from django.views.generic.base import RedirectView
 from django.urls import path, include
 from django.contrib import admin
@@ -447,7 +446,6 @@ urlpatterns = [
     # admin last
     path("admin/", admin.site.urls),
 ]
-
 
 
 
