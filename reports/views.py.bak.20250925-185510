@@ -164,33 +164,22 @@ def report_trial_balance(request):
     return render(request, "admin/accounting/reports/trial_balance.html", context)
 # ---- Export dispatchers (force format, reuse existing views) ----
 from django.http import Http404
-
-# --- Redirect-based export dispatchers (robust) ---
-from urllib.parse import parse_qsl, urlencode
-from django.http import Http404
-from django.shortcuts import redirect
-
 def _dispatch_export(request, report_id: str, fmt: str):
-    # Map report slugs to canonical pages rendered by our views
-    url_map = {
-        "trial-balance":  "/admin/reports/trial-balance/",
-        "general-ledger": "/admin/reports/general-ledger/",
-        # add more slugs here as you add reports
+    # Map slugs to existing report views
+    mapping = {
+        "general-ledger": report_general_ledger,
+        "trial-balance":  report_trial_balance,
+        # Add others here when available:
+        # "journal":        report_journal,
+        # "account-statement": report_account_statement,
     }
-    target = url_map.get(report_id)
-    if not target:
+    view = mapping.get(report_id)
+    if not view:
         raise Http404(f"Unknown report: {report_id}")
-
-    # Preserve filters (?from, ?to, ?code_prefix, ?account) and force format
-    qs = request.META.get("QUERY_STRING", "")
-    params = {}
-    if qs:
-        try:
-            params = dict(parse_qsl(qs, keep_blank_values=True))
-        except Exception:
-            return redirect(f"{target}?{qs}&format={fmt}" if qs else f"{target}?format={fmt}")
-    params["format"] = fmt
-    return redirect(f"{target}?{urlencode(params)}")
+    q = request.GET.copy()
+    q["format"] = fmt
+    request.GET = q
+    return view(request)
 
 def export_xlsx_dispatch(request, report_id: str):
     return _dispatch_export(request, report_id, "xlsx")

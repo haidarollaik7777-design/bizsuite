@@ -164,14 +164,33 @@ def report_trial_balance(request):
     return render(request, "admin/accounting/reports/trial_balance.html", context)
 # ---- Export dispatchers (force format, reuse existing views) ----
 from django.http import Http404
+def _dispatch_export(request, report_id: str, fmt: str):
+    # Map slugs to existing report views
+    mapping = {
+        "general-ledger": report_general_ledger,
+        "trial-balance":  report_trial_balance,
+        # Add others here when available:
+        # "journal":        report_journal,
+        # "account-statement": report_account_statement,
+    }
+    view = mapping.get(report_id)
+    if not view:
+        raise Http404(f"Unknown report: {report_id}")
+    q = request.GET.copy()
+    q["format"] = fmt
+    request.GET = q
+    return view(request)
 
-# --- Redirect-based export dispatchers (robust) ---
-from urllib.parse import parse_qsl, urlencode
-from django.http import Http404
+def export_xlsx_dispatch(request, report_id: str):
+    return _dispatch_export(request, report_id, "xlsx")
+
+def export_csv_dispatch(request, report_id: str):
+    return _dispatch_export(request, report_id, "csv")from django.http import Http404
 from django.shortcuts import redirect
 
+# --- Redirect-based export dispatchers (robust) ---
 def _dispatch_export(request, report_id: str, fmt: str):
-    # Map report slugs to canonical pages rendered by our views
+    # Map report slugs to their canonical URLs rendered by our views
     url_map = {
         "trial-balance":  "/admin/reports/trial-balance/",
         "general-ledger": "/admin/reports/general-ledger/",
@@ -181,15 +200,22 @@ def _dispatch_export(request, report_id: str, fmt: str):
     if not target:
         raise Http404(f"Unknown report: {report_id}")
 
-    # Preserve filters (?from, ?to, ?code_prefix, ?account) and force format
+    # Preserve existing filters (?from, ?to, ?code_prefix, ?account) and force format
     qs = request.META.get("QUERY_STRING", "")
+    try:
+        from urllib.parse import parse_qsl, urlencode
+    except Exception:
+        # Windows py path safety, but urllib.parse is in stdlib
+        parse_qsl = None
     params = {}
     if qs:
         try:
             params = dict(parse_qsl(qs, keep_blank_values=True))
         except Exception:
+            # very odd querystring, just pass it through verbatim
             return redirect(f"{target}?{qs}&format={fmt}" if qs else f"{target}?format={fmt}")
     params["format"] = fmt
+    from urllib.parse import urlencode
     return redirect(f"{target}?{urlencode(params)}")
 
 def export_xlsx_dispatch(request, report_id: str):
