@@ -1,0 +1,69 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<h1>Trial Balance</h1>
+
+<form method="get" class="filters" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin: 12px 0;">
+  <div>
+    <label>From</label>
+    <input type="date" name="from" value="{{ dfrom|date:'Y-m-d' }}">
+  </div>
+  <div>
+    <label>To</label>
+    <input type="date" name="to" value="{{ dto|date:'Y-m-d' }}">
+  </div>
+  <div>
+    <label>Account code (prefix)</label>
+    <input type="text" name="code_prefix" placeholder="e.g. 1200" value="{{ code_prefix }}">
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button type="submit">Apply</button>
+    <a class="button" href="{{ request.path }}">Clear</a>
+    <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
+    <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=xlsx">Export XLSX</a>
+  </div>
+</form>
+
+<table class="tb" style="width:100%; border-collapse:collapse;">
+  <thead>
+    <tr>
+      <th style="text-align:left; padding:6px;">Code</th>
+      <th style="text-align:left; padding:6px;">Name</th>
+      <th style="text-align:right; padding:6px;">Debit</th>
+      <th style="text-align:right; padding:6px;">Credit</th>
+      <th style="text-align:right; padding:6px;">Balance</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td style="padding:6px;">{{ r.account__code }}</td>
+        <td style="padding:6px;">{{ r.account__name }}</td>
+        <td style="text-align:right; padding:6px;">{{ r.deb|floatformat:2 }}</td>
+        <td style="text-align:right; padding:6px;">{{ r.cre|floatformat:2 }}</td>
+        <td style="text-align:right; padding:6px;">{{ r.deb|add:-r.cre|floatformat:2 }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" style="padding:6px;">No rows found for the selected filters.</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <th colspan="2" style="text-align:left; padding:6px;">TOTALS</th>
+      <th style="text-align:right; padding:6px;">{{ total_deb|floatformat:2 }}</th>
+      <th style="text-align:right; padding:6px;">{{ total_cre|floatformat:2 }}</th>
+      <th style="text-align:right; padding:6px;">{{ total_deb|add:-total_cre|floatformat:2 }}</th>
+    </tr>
+    <tr>
+      <td colspan="5" style="padding:6px;">
+        {% if balanced %}
+          <span style="background:#e6ffed; color:#0b7a28; padding:4px 8px; border-radius:6px; font-weight:600;">Balanced</span>
+        {% else %}
+          <span style="background:#ffecec; color:#a10000; padding:4px 8px; border-radius:6px; font-weight:600;">Out of Balance</span>
+        {% endif %}
+      </td>
+    </tr>
+  </tfoot>
+</table>
+{% endblock %}

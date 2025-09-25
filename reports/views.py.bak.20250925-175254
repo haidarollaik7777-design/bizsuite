@@ -108,12 +108,10 @@ def _date_range(request):
         dfrom = safe_date(dfrom, today.replace(day=1))
         dto   = safe_date(dto, today)
     return dfrom, dto
+
 def report_general_ledger(request):
     from django.apps import apps
-    from django.shortcuts import render
-
     JournalLine = apps.get_model("accounting", "JournalLine")
-
     dfrom, dto = _date_range(request)
     account_id  = request.GET.get("account")  # optional exact account id
     code_prefix = (request.GET.get("code_prefix") or "").strip()
@@ -129,7 +127,7 @@ def report_general_ledger(request):
 
     q = q.order_by("entry__date","entry_id","id").distinct()
 
-    # Build rows once for exports
+    # Build normalized rows for export
     rows = []
     for ln in q:
         rows.append([
@@ -147,6 +145,8 @@ def report_general_ledger(request):
     if _want_xlsx(request):
         return rows_to_xlsx_response(f"general_ledger_{dfrom}_to_{dto}", headers, rows)
 
+    # HTML render (template expects 'lines', 'dfrom','dto','account_id','code_prefix')
+    from django.shortcuts import render
     context = {
         "lines": q,
         "dfrom": dfrom,
@@ -154,7 +154,8 @@ def report_general_ledger(request):
         "account_id": account_id,
         "code_prefix": code_prefix,
     }
-    return render(request, "admin/accounting/reports/general_ledger.html", context)def report_trial_balance(request):
+    return render(request, "admin/accounting/reports/general_ledger.html", context)
+def report_trial_balance(request):
     from django.apps import apps
     from django.shortcuts import render
     from django.db.models import Sum, Value
@@ -223,5 +224,4 @@ def report_general_ledger(request):
         "total_net": total_net, "balanced": balanced,
     }
     return render(request, "admin/accounting/reports/trial_balance.html", context)
-
 
