@@ -1,4 +1,8 @@
-﻿{% extends "admin/base_site.html" %}
+﻿<div class="tb-toolbar" style="margin:10px 0; display:flex; gap:8px; flex-wrap:wrap;">
+  <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
+  <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=xlsx">Export XLSX</a>
+</div>
+{% extends "admin/base_site.html" %}
 {% block content %}
   <h1>{{ title }}</h1>
   <form method="get" style="margin-bottom:1rem">
@@ -38,6 +42,7 @@
     </tbody>
   </table>
 {% endblock %}
+
 
 
 
