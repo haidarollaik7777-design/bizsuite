@@ -1,0 +1,58 @@
+﻿{% extends "admin/base.html" %}
+{% block extrahead %}{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // Identify which report proxy page we're on
+  var path = (window.location.pathname || '').toLowerCase();
+  var slug = null;
+  if (path.indexOf('/admin/ledger/reportcenterproxy/trial-balance/') >= 0) slug = 'trial-balance';
+  else if (path.indexOf('/admin/ledger/reportcenterproxy/general-ledger/') >= 0) slug = 'general-ledger';
+  else if (path.indexOf('/admin/ledger/reportcenterproxy/income-statement/') >= 0) slug = 'income-statement';
+  if (!slug) return;
+
+  // Build final /admin/reports/<slug> URL with existing filters + format=xlsx
+  var params = new URLSearchParams(window.location.search || '');
+  params.delete('format');  // avoid duplicates
+  params.append('format', 'xlsx');
+  var exportHref = '/admin/reports/' + slug + '/?' + params.toString();
+
+  // Build a dedicated toolbar so no form/page JS can intercept
+  var bar = document.createElement('div');
+  bar.id = 'xlsx-toolbar';
+  bar.style = 'margin:12px 0; display:flex; gap:8px; flex-wrap:wrap;';
+
+  function mkLink(text, target){
+    var a = document.createElement('a');
+    a.className = 'button';
+    a.textContent = text;
+    a.href = exportHref;
+    a.target = target;           // '_self' or '_blank'
+    a.rel = 'noopener';
+    a.title = exportHref;        // easy to verify on hover
+    // Force navigation even if some JS tries to hijack clicks
+    a.addEventListener('click', function(ev){
+      try { ev.preventDefault(); } catch(e){}
+      try { (target === '_blank') ? window.open(a.href, '_blank') : window.location.assign(a.href); } catch(e){}
+      return false;
+    }, {capture:true});
+    return a;
+  }
+
+  bar.appendChild(mkLink('Export XLSX', '_self'));
+  bar.appendChild(mkLink('Open XLSX (new tab)', '_blank'));
+
+  // Insert toolbar right after H1/H2, or before the first form as fallback
+  var header = document.querySelector('h1,h2');
+  if (header && header.parentNode) {
+    (header.nextElementSibling)
+      ? header.parentNode.insertBefore(bar, header.nextElementSibling)
+      : header.parentNode.appendChild(bar);
+  } else {
+    var form = document.querySelector('form');
+    if (form && form.parentNode) form.parentNode.insertBefore(bar, form);
+    else document.body.insertBefore(bar, document.body.firstChild);
+  }
+});
+</script>
+{% endblock %}
+

@@ -1,0 +1,349 @@
+from django.db.models.functions import Coalesce
+from django.db.models import Sum, Value
+from django.utils import timezone
+from .utils.xlsx_export import rows_to_xlsx_response
+from .utils.csv_export import rows_to_csv_response, safe_date
+# reports/views.py
+from django.contrib.admin.views.decorators import staff_member_required
+from django.http import Http404, HttpResponse
+from django.shortcuts import render
+from django.utils.encoding import smart_str
+from django.views.decorators.http import require_GET
+import csv, importlib
+
+VALID = {"trial-balance","general-ledger","balance-sheet","income-statement"}
+TITLES = {
+    "trial-balance": "Trial Balance",
+    "general-ledger": "General Ledger",
+    "balance-sheet": "Balance Sheet",
+    "income-statement": "Income Statement",
+}
+CSV_NAMES = {
+    "trial-balance": "trial_balance.csv",
+    "general-ledger": "general_ledger.csv",
+    "balance-sheet": "balance_sheet.csv",
+    "income-statement": "income_statement.csv",
+}
+
+def _error_builder(msg):
+    def _b(date_from=None, date_to=None):
+        return {"title":"Report Error","columns":["error"],"rows":[{"error":msg}],
+                "date_from":date_from,"date_to":date_to}
+    return _b
+
+def _builder(slug):
+    try:
+        rf = importlib.import_module("reports.reports_financial")
+    except Exception as e:
+        return _error_builder(f"Import reports_financial failed: {e!s}")
+    name = {
+        "trial-balance":"build_trial_balance",
+        "general-ledger":"build_general_ledger",
+        "balance-sheet":"build_balance_sheet",
+        "income-statement":"build_income_statement",
+    }[slug]
+    fn = getattr(rf, name, None)
+    return fn or _error_builder(f"Builder '{name}' missing in reports/reports_financial.py")
+
+@staff_member_required
+@require_GET
+def report_center_proxy(request, report_id: str):
+    if report_id not in VALID:
+        raise Http404(f"Report with ID '{report_id}' doesn't exist.")
+    date_from = request.GET.get("date_from")
+    date_to = request.GET.get("date_to")
+    fmt = (request.GET.get("format") or "").lower()
+
+    builder = _builder(report_id)
+    try:
+        payload = builder(date_from=date_from, date_to=date_to)
+    except Exception as e:
+        payload = {"title":TITLES[report_id],"columns":["error"],
+                   "rows":[{"error":f"Runtime error: {e!s}"}],
+                   "date_from":date_from,"date_to":date_to}
+
+    columns = payload.get("columns", [])
+    rows = payload.get("rows", [])
+
+    if fmt == "csv":
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{smart_str(CSV_NAMES[report_id])}"'
+        writer = csv.DictWriter(resp, fieldnames=columns)
+        writer.writeheader()
+        for r in rows:
+            writer.writerow({k: r.get(k, "") for k in columns})
+        return resp
+
+    return render(request, "reports/report_center_proxy.html", {
+        "title": TITLES[report_id],
+        "columns": columns,
+        "rows": rows,
+        "date_from": payload.get("date_from"),
+        "date_to": payload.get("date_to"),
+        "report_id": report_id,
+        "debug_rows": None,
+    })
+
+def _is_csv(request):
+    return (request.GET.get("format") or "").lower() == "csv"
+def _want_xlsx(request):
+    return (request.GET.get("format") or "").lower() in ("xlsx", "excel")
+def _date_range(request):
+    """
+    Parses ?from=YYYY-MM-DD&to=YYYY-MM-DD, defaults to current month.
+    """
+    today = timezone.now().date()
+    dfrom = request.GET.get("from")
+    dto   = request.GET.get("to")
+    if not dfrom or not dto:
+        dfrom = today.replace(day=1)
+        if today.month == 12:
+            dto = today.replace(day=31)
+        else:
+            from datetime import timedelta
+            import calendar
+            last_day = calendar.monthrange(today.year, today.month)[1]
+            dto = today.replace(day=last_day)
+    else:
+        dfrom = safe_date(dfrom, today.replace(day=1))
+        dto   = safe_date(dto, today)
+    return dfrom, dto
+
+def report_general_ledger(request):
+    from django.apps import apps
+    JournalLine = apps.get_model("accounting", "JournalLine")
+    dfrom, dto = _date_range(request)
+    account_id  = request.GET.get("account")  # optional exact account id
+    code_prefix = (request.GET.get("code_prefix") or "").strip()
+
+    q = (JournalLine.objects
+         .select_related("entry","account")
+         .filter(entry__is_posted=True, entry__date__gte=dfrom, entry__date__lte=dto))
+
+    if account_id:
+        q = q.filter(account_id=account_id)
+    if code_prefix:
+        q = q.filter(account__code__startswith=code_prefix)
+
+    q = q.order_by("entry__date","entry_id","id").distinct()
+
+    # Build normalized rows for export
+    rows = []
+    for ln in q:
+        rows.append([
+            ln.entry.date.isoformat(),
+            getattr(ln.account, "code", ""),
+            getattr(ln.account, "name", ""),
+            f"{float(ln.debit or 0):.2f}",
+            f"{float(ln.credit or 0):.2f}",
+            (ln.memo or ln.entry.memo or "")[:500],
+        ])
+    headers = ["Date","Code","Name","Debit","Credit","Memo"]
+
+    if _is_csv(request):
+        return rows_to_csv_response(f"general_ledger_{dfrom}_to_{dto}", headers, rows)
+    if _want_xlsx(request):
+        return rows_to_xlsx_response(f"general_ledger_{dfrom}_to_{dto}", headers, rows)
+
+    # HTML render (template expects 'lines', 'dfrom','dto','account_id','code_prefix')
+    from django.shortcuts import render
+    context = {
+        "lines": q,
+        "dfrom": dfrom,
+        "dto": dto,
+        "account_id": account_id,
+        "code_prefix": code_prefix,
+    }
+    return render(request, "admin/accounting/reports/general_ledger.html", context)
+
+def report_trial_balance(request):
+    from django.apps import apps
+    JournalLine = apps.get_model("accounting", "JournalLine")
+
+    dfrom, dto = _date_range(request)
+    code_prefix = (request.GET.get("code_prefix") or "").strip()
+
+    base = (JournalLine.objects
+            .filter(entry__is_posted=True, entry__date__gte=dfrom, entry__date__lte=dto))
+
+    if code_prefix:
+        base = base.filter(account__code__startswith=code_prefix)
+
+    # Aggregate per account
+    period = (base.values("account_id", "account__code", "account__name")
+                 .annotate(
+                     deb=Coalesce(Sum("debit"), Value(0)),
+                     cre=Coalesce(Sum("credit"), Value(0)),
+                 )
+                 .order_by("account__code"))
+
+    # Build rows + totals
+    rows = []
+    total_deb = 0.0
+    total_cre = 0.0
+    for r in period:
+        deb = float(r["deb"] or 0)
+        cre = float(r["cre"] or 0)
+        total_deb += deb
+        total_cre += cre
+        rows.append([
+            r["account__code"] or "",
+            r["account__name"] or "",
+            f"{deb:.2f}",
+            f"{cre:.2f}",
+            f"{(deb - cre):.2f}",
+        ])
+
+    headers = ["Code", "Name", "Debit", "Credit", "Balance"]
+    balanced = abs(total_deb - total_cre) < 0.005  # tolerance
+
+    if _is_csv(request):
+        # append totals row
+        rows.append(["TOTALS", "", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{(total_deb-total_cre):.2f}"])
+        return rows_to_csv_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows)
+
+    if _want_xlsx(request):
+        # append totals row
+        rows.append(["TOTALS", "", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{(total_deb-total_cre):.2f}"])
+        return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows)
+
+    # HTML
+    from django.shortcuts import render
+    context = {
+        "rows": period,           # queryset dicts for table
+        "dfrom": dfrom,
+        "dto": dto,
+        "code_prefix": code_prefix,
+        "total_deb": total_deb,
+        "total_cre": total_cre,
+        "balanced": balanced,
+    }
+    return render(request, "admin/accounting/reports/trial_balance.html", context)
+
+def report_income_statement(request):
+    """
+    Income Statement: Revenue and Expenses totals for a period.
+    CSV/XLSX exports with rows [Code, Name, Amount].
+    Sign convention:
+      - Revenue (4xxx): amount = credit - debit
+      - Expenses (5xxx): amount = debit - credit
+      - Others: debit - credit (treated as expense-style)
+    """
+    from django.apps import apps
+    from django.shortcuts import render
+
+    JournalLine = apps.get_model("accounting", "JournalLine")
+
+    # Dates
+    dfrom, dto = _date_range(request)
+    code_prefix = (request.GET.get("code_prefix") or "").strip()
+
+    base = (JournalLine.objects
+            .select_related("account","entry")
+            .filter(entry__is_posted=True, entry__date__gte=dfrom, entry__date__lte=dto))
+    if code_prefix:
+        base = base.filter(account__code__startswith=code_prefix)
+
+    agg = (base.values("account_id","account__code","account__name")
+               .annotate(deb=Coalesce(Sum("debit"), Value(0)),
+                         cre=Coalesce(Sum("credit"), Value(0)))
+               .order_by("account__code"))
+
+    revenue_rows = []
+    expense_rows = []
+    total_rev = 0.0
+    total_exp = 0.0
+
+    for r in agg:
+        code = (r["account__code"] or "").strip()
+        name = (r["account__name"] or "").strip()
+        deb = float(r["deb"] or 0.0)
+        cre = float(r["cre"] or 0.0)
+
+        # classify by code (fallback on name)
+        lcname = name.lower()
+        is_rev = code.startswith("4") or ("revenue" in lcname)
+        is_exp = code.startswith("5") or ("expense" in lcname or "expenses" in lcname)
+
+        if is_rev:
+            amt = cre - deb
+            total_rev += amt
+            revenue_rows.append([code, name, f"{amt:.2f}"])
+        elif is_exp:
+            amt = deb - cre
+            total_exp += amt
+            expense_rows.append([code, name, f"{amt:.2f}"])
+        else:
+            # treat as expense-style by default
+            amt = deb - cre
+            total_exp += amt
+            expense_rows.append([code, name, f"{amt:.2f}"])
+
+    net_income = total_rev - total_exp
+
+    # --- Exports ---
+    headers = ["Code","Name","Amount"]
+    rows_export = []
+    # Revenue section
+    if revenue_rows:
+        rows_export.append(["Revenue","",""])
+        rows_export.extend(revenue_rows)
+        rows_export.append(["Total Revenue","","{:.2f}".format(total_rev)])
+    else:
+        rows_export.append(["Revenue","",""])
+        rows_export.append(["(No rows)","","0.00"])
+        rows_export.append(["Total Revenue","","{:.2f}".format(total_rev)])
+    # Expenses section
+    if expense_rows:
+        rows_export.append(["Expenses","",""])
+        rows_export.extend(expense_rows)
+        rows_export.append(["Total Expenses","","{:.2f}".format(total_exp)])
+    else:
+        rows_export.append(["Expenses","",""])
+        rows_export.append(["(No rows)","","0.00"])
+        rows_export.append(["Total Expenses","","{:.2f}".format(total_exp)])
+    # Net Income
+    rows_export.append(["Net Income","","{:.2f}".format(net_income)])
+
+    if _is_csv(request):
+        return rows_to_csv_response(f"income_statement_{dfrom}_to_{dto}", headers, rows_export)
+    if _want_xlsx(request):
+        return rows_to_xlsx_response(f"income_statement_{dfrom}_to_{dto}", headers, rows_export)
+
+    # --- HTML ---
+    context = {
+        "dfrom": dfrom, "dto": dto,
+        "code_prefix": code_prefix,
+        "revenue_rows": revenue_rows,
+        "expense_rows": expense_rows,
+        "total_rev": total_rev,
+        "total_exp": total_exp,
+        "net_income": net_income,
+    }
+    return render(request, "admin/accounting/reports/income_statement.html", context)
+
+from urllib.parse import parse_qsl, urlencode
+from django.http import Http404
+from django.shortcuts import redirect
+def _dispatch_export(request, report_id: str, fmt: str):
+    url_map = {
+        "trial-balance":  "/admin/reports/trial-balance/",
+        "general-ledger": "/admin/reports/general-ledger/",
+        "income-statement": "/admin/reports/income-statement/",
+    }
+    target = url_map.get(report_id)
+    if not target:
+        raise Http404(f"Unknown report: {report_id}")
+    qs = request.META.get("QUERY_STRING", "")
+    params = {}
+    if qs:
+        try:
+            params = dict(parse_qsl(qs, keep_blank_values=True))
+        except Exception:
+            return redirect(f"{target}?{qs}&format={fmt}" if qs else f"{target}?format={fmt}")
+    params["format"] = fmt
+    return redirect(f"{target}?{urlencode(params)}")
+def export_xlsx_dispatch(request, report_id: str):
+    return _dispatch_export(request, report_id, "xlsx")
+def export_csv_dispatch(request, report_id: str):
+    return _dispatch_export(request, report_id, "csv")

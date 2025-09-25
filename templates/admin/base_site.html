@@ -1,0 +1,82 @@
+{% extends "admin/base.html" %}
+{% block extrahead %}{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // Only on these proxy pages:
+  var path = (window.location.pathname || '').toLowerCase();
+  var slug = null;
+  if (path.indexOf('/admin/ledger/reportcenterproxy/trial-balance/') >= 0) slug = 'trial-balance';
+  else if (path.indexOf('/admin/ledger/reportcenterproxy/general-ledger/') >= 0) slug = 'general-ledger';
+  else if (path.indexOf('/admin/ledger/reportcenterproxy/income-statement/') >= 0) slug = 'income-statement';
+  if (!slug) return;
+
+  // Build absolute URL to /admin/reports/<slug>/?...&format=xlsx
+  var origin = (window.top && window.top.location && window.top.location.origin) || window.location.origin || '';
+  var params = new URLSearchParams(window.location.search || '');
+  params.delete('format');
+  params.append('format', 'xlsx');
+  var absoluteHref = origin + '/admin/reports/' + slug + '/?' + params.toString();
+
+  // Toolbar container
+  var bar = document.createElement('div');
+  bar.id = 'xlsx-toolbar';
+  bar.style = 'margin:12px 0; display:flex; gap:8px; flex-wrap:wrap; align-items:center;';
+
+  function strongLink(text, target){
+    var a = document.createElement('a');
+    a.className = 'button';
+    a.textContent = text;
+    a.href = absoluteHref;
+    a.target = target;   // '_self' or '_blank'
+    a.rel = 'noopener';
+    a.title = absoluteHref;
+
+    // Forced navigation (top-level) even if other JS hijacks clicks:
+    a.addEventListener('click', function(ev){
+      try { ev.preventDefault(); ev.stopImmediatePropagation(); ev.stopPropagation(); } catch(e){}
+      try {
+        if (target === '_blank') {
+          var w = window.top ? window.top.open(absoluteHref, '_blank', 'noopener') : window.open(absoluteHref, '_blank', 'noopener');
+          if (!w) { window.top.location.href = absoluteHref; } // popup blocked -> same-tab fallback
+        } else {
+          window.top.location.href = absoluteHref;
+        }
+      } catch(e) {
+        // Last resort: assign on current window
+        window.location.href = absoluteHref;
+      }
+      return false;
+    }, {capture:true});
+    return a;
+  }
+
+  // Copyable URL (helpful if everything else blocks)
+  var copyWrap = document.createElement('span');
+  var inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = absoluteHref;
+  inp.readOnly = true;
+  inp.style = 'width:520px; padding:6px;';
+  inp.title = 'Export URL (click to select; Ctrl+C to copy)';
+  inp.addEventListener('click', function(){ try { this.select(); } catch(e){} });
+  copyWrap.appendChild(inp);
+
+  bar.appendChild(strongLink('Export XLSX', '_self'));
+  bar.appendChild(strongLink('Open XLSX (new tab)', '_blank'));
+  bar.appendChild(copyWrap);
+
+  // Insert toolbar right after the main heading or before the first form
+  var header = document.querySelector('h1,h2');
+  if (header && header.parentNode) {
+    (header.nextElementSibling)
+      ? header.parentNode.insertBefore(bar, header.nextElementSibling)
+      : header.parentNode.appendChild(bar);
+  } else {
+    var form = document.querySelector('form');
+    if (form && form.parentNode) form.parentNode.insertBefore(bar, form);
+    else document.body.insertBefore(bar, document.body.firstChild);
+  }
+});
+</script>
+{% endblock %}
+

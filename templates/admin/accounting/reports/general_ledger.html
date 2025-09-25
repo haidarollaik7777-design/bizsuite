@@ -1,36 +1,41 @@
 ﻿{% extends "admin/base_site.html" %}
-{% load report_extras %}
 {% block content %}
-  <h1>{{ title }}</h1>
-  <form method="get" style="margin-bottom:1rem; display:flex; gap:1rem; align-items:end; flex-wrap:wrap">
-    <div><label>From<br><input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label></div>
-    <div><label>To<br><input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label></div>
-    <div><label>Account code (prefix)<br><input type="text" name="account_code" value="{{ account_code }}" placeholder="e.g. 1200"></label></div>
-    <div>
-      <button class="button" type="submit">Apply</button>
-      <a class="button" href="?">Clear</a>
-      <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}{% if account_code %}account_code={{ account_code }}&{% endif %}format=csv">Export CSV</a>
-      <a class="button" href="/admin/rcx/general-ledger.xlsx{% if date_from or date_to or account_code %}?{% endif %}{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}{% if account_code %}account_code={{ account_code }}{% endif %}">Export XLSX</a>
-    </div>
-  </form>
+<h1>General Ledger</h1>
 
-  <table class="listtable">
-    <thead>
-      <tr><th>Date</th><th>Code</th><th>Name</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th>Memo</th></tr>
-    </thead>
-    <tbody>
-      {% for r in rows %}
-        <tr>
-          <td>{{ r.date }}</td>
-          <td>{{ r.code }}</td>
-          <td>{{ r.name }}</td>
-          <td style="text-align:right">{{ r.debit|money }}</td>
-          <td style="text-align:right">{{ r.credit|money }}</td>
-          <td>{{ r.memo }}</td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="6">No data.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:12px 0;">
+  <div><label>From</label><input type="date" name="from" value="{{ dfrom|date:'Y-m-d' }}"></div>
+  <div><label>To</label><input type="date" name="to" value="{{ dto|date:'Y-m-d' }}"></div>
+  <div><label>Account code (prefix)</label><input type="text" name="code_prefix" placeholder="e.g. 1200" value="{{ code_prefix }}"></div>
+  <div style="display:flex; gap:8px;">
+    <button type="submit">Apply</button>
+    <a class="button" href="{{ request.path }}">Clear</a>
+    <a class="button" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
+    <a class="button" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=xlsx">Export XLSX</a>
+  </div>
+</form>
+
+<table style="width:100%; border-collapse:collapse;">
+  <thead><tr>
+    <th style="text-align:left; padding:6px;">Date</th>
+    <th style="text-align:left; padding:6px;">Code</th>
+    <th style="text-align:left; padding:6px;">Name</th>
+    <th style="text-align:right; padding:6px;">Debit</th>
+    <th style="text-align:right; padding:6px;">Credit</th>
+    <th style="text-align:left; padding:6px;">Memo</th>
+  </tr></thead>
+  <tbody>
+    {% for d,c,n,deb,cre,memo in rows %}
+      <tr>
+        <td style="padding:6px;">{{ d }}</td>
+        <td style="padding:6px;">{{ c }}</td>
+        <td style="padding:6px;">{{ n }}</td>
+        <td style="text-align:right; padding:6px;">{{ deb }}</td>
+        <td style="text-align:right; padding:6px;">{{ cre }}</td>
+        <td style="padding:6px;">{{ memo }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" style="padding:6px;">No rows found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
 {% endblock %}

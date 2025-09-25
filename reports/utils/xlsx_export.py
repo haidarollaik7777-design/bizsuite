@@ -1,24 +1,28 @@
-﻿from django.http import HttpResponse
-from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
+﻿from io import BytesIO
+from django.http import HttpResponse
 
-def rows_to_xlsx_response(filename: str, headers: list[str], rows: list[list]):
+def rows_to_xlsx_response(filename, headers, rows):
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+    except Exception as e:
+        return HttpResponse("openpyxl missing: " + str(e), status=500, content_type="text/plain")
     wb = Workbook()
     ws = wb.active
     ws.title = "Report"
-    ws.append(headers)
-    for r in rows:
-        ws.append(r)
-    for col_idx, _ in enumerate(headers, start=1):
-        max_len = 0
-        for row in ws.iter_rows(min_col=col_idx, max_col=col_idx):
-            val = row[0].value
-            if val is None:
-                continue
-            max_len = max(max_len, len(str(val)))
-        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
-    resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    safe = filename.replace(" ", "_").replace("/", "_")
-    resp["Content-Disposition"] = f'attachment; filename="{safe}.xlsx"'
-    wb.save(resp)
+    r = 1
+    if headers:
+        ws.append(headers); r += 1
+        # Bold headers
+        for c in range(1, len(headers) + 1):
+            ws.cell(row=1, column=c).font = Font(bold=True)
+    for row in rows:
+        ws.append([("" if v is None else v) for v in row]); r += 1
+    bio = BytesIO()
+    wb.save(bio); bio.seek(0)
+    resp = HttpResponse(
+        bio.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{filename}.xlsx"'
     return resp
