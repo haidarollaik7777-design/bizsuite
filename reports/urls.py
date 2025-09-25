@@ -3,6 +3,9 @@ from django.urls import path
 from . import views as v
 
 urlpatterns = [
+    path('export/xlsx/general-ledger/', views.report_general_ledger, name='xlsx_general_ledger'),
+    path('export/csv/general-ledger/', views.report_general_ledger, name='csv_general_ledger'),
+    path('general-ledger/', views.report_general_ledger, name='report_general_ledger'),
     path('tb-auto.csv', tb_auto_csv, name='tb-auto-csv'),
     path('trial-balance/',    v.trial_balance_api, name='trial-balance'),
     path('profit-loss/',      v.profit_loss_api,   name='profit-loss'),
@@ -10,5 +13,8 @@ urlpatterns = [
     path('trial-balance.csv', v.trial_balance_csv_simple),
     path('ping.csv', v.csv_ping),
 ]
+
+
+
 
 

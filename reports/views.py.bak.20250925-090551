@@ -1,7 +1,4 @@
-﻿from django.utils import timezone
-from .utils.xlsx_export import rows_to_xlsx_response
-from .utils.csv_export import rows_to_csv_response, safe_date
-# reports/views.py
+﻿# reports/views.py
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
@@ -81,76 +78,3 @@ def report_center_proxy(request, report_id: str):
         "report_id": report_id,
         "debug_rows": None,
     })
-
-def _is_csv(request):
-    return (request.GET.get("format") or "").lower() == "csv"
-def _want_xlsx(request):
-    return (request.GET.get("format") or "").lower() in ("xlsx", "excel")
-def _date_range(request):
-    """
-    Parses ?from=YYYY-MM-DD&to=YYYY-MM-DD, defaults to current month.
-    """
-    today = timezone.now().date()
-    dfrom = request.GET.get("from")
-    dto   = request.GET.get("to")
-    if not dfrom or not dto:
-        dfrom = today.replace(day=1)
-        if today.month == 12:
-            dto = today.replace(day=31)
-        else:
-            from datetime import timedelta
-            import calendar
-            last_day = calendar.monthrange(today.year, today.month)[1]
-            dto = today.replace(day=last_day)
-    else:
-        dfrom = safe_date(dfrom, today.replace(day=1))
-        dto   = safe_date(dto, today)
-    return dfrom, dto
-
-def report_general_ledger(request):
-    from django.apps import apps
-    JournalLine = apps.get_model("accounting", "JournalLine")
-    dfrom, dto = _date_range(request)
-    account_id  = request.GET.get("account")  # optional exact account id
-    code_prefix = (request.GET.get("code_prefix") or "").strip()
-
-    q = (JournalLine.objects
-         .select_related("entry","account")
-         .filter(entry__is_posted=True, entry__date__gte=dfrom, entry__date__lte=dto))
-
-    if account_id:
-        q = q.filter(account_id=account_id)
-    if code_prefix:
-        q = q.filter(account__code__startswith=code_prefix)
-
-    q = q.order_by("entry__date","entry_id","id").distinct()
-
-    # Build normalized rows for export
-    rows = []
-    for ln in q:
-        rows.append([
-            ln.entry.date.isoformat(),
-            getattr(ln.account, "code", ""),
-            getattr(ln.account, "name", ""),
-            f"{float(ln.debit or 0):.2f}",
-            f"{float(ln.credit or 0):.2f}",
-            (ln.memo or ln.entry.memo or "")[:500],
-        ])
-    headers = ["Date","Code","Name","Debit","Credit","Memo"]
-
-    if _is_csv(request):
-        return rows_to_csv_response(f"general_ledger_{dfrom}_to_{dto}", headers, rows)
-    if _want_xlsx(request):
-        return rows_to_xlsx_response(f"general_ledger_{dfrom}_to_{dto}", headers, rows)
-
-    # HTML render (template expects 'lines', 'dfrom','dto','account_id','code_prefix')
-    from django.shortcuts import render
-    context = {
-        "lines": q,
-        "dfrom": dfrom,
-        "dto": dto,
-        "account_id": account_id,
-        "code_prefix": code_prefix,
-    }
-    return render(request, "admin/accounting/reports/general_ledger.html", context)
-

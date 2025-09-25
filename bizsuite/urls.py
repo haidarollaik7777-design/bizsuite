@@ -1,4 +1,5 @@
-﻿from django.contrib import admin
+﻿from django.urls import path, include
+from django.contrib import admin
 from django.urls import path, reverse
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
@@ -426,6 +427,7 @@ def rc_dispatch(request, report_id):
 
 # ---------- routes ----------
 urlpatterns = [
+    path('admin/reports/', include('reports.urls')),
     # explicit reports first (so they win)
     path("admin/ledger/reportcenterproxy/trial-balance/",     admin.site.admin_view(report_trial_balance),    name="ledger_trial_balance"),
     path("admin/ledger/reportcenterproxy/general-ledger/",    admin.site.admin_view(report_general_ledger),   name="ledger_general_ledger"),
@@ -438,5 +440,6 @@ urlpatterns = [
     # admin last
     path("admin/", admin.site.urls),
 ]
+
 
 
