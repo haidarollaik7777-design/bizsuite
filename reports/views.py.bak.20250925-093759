@@ -221,4 +221,3 @@ def report_trial_balance(request):
     return render(request, "admin/accounting/reports/trial_balance.html", context)
 
 
-
