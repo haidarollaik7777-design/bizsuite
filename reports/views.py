@@ -155,9 +155,12 @@ def report_general_ledger(request):
         "code_prefix": code_prefix,
     }
     return render(request, "admin/accounting/reports/general_ledger.html", context)
-
 def report_trial_balance(request):
     from django.apps import apps
+    from django.shortcuts import render
+    from django.db.models import Sum, Value
+    from django.db.models.functions import Coalesce
+
     JournalLine = apps.get_model("accounting", "JournalLine")
 
     dfrom, dto = _date_range(request)
@@ -165,60 +168,60 @@ def report_trial_balance(request):
 
     base = (JournalLine.objects
             .filter(entry__is_posted=True, entry__date__gte=dfrom, entry__date__lte=dto))
-
     if code_prefix:
         base = base.filter(account__code__startswith=code_prefix)
 
-    # Aggregate per account
-    period = (base.values("account_id", "account__code", "account__name")
-                 .annotate(
-                     deb=Coalesce(Sum("debit"), Value(0)),
-                     cre=Coalesce(Sum("credit"), Value(0)),
-                 )
+    # Aggregate values per account
+    period = (base.values("account_id","account__code","account__name")
+                 .annotate(deb=Coalesce(Sum("debit"), Value(0)),
+                           cre=Coalesce(Sum("credit"), Value(0)))
                  .order_by("account__code"))
 
-    # Build rows + totals
-    rows = []
+    # Prepare display/export rows and totals
+    rows_display = []
+    rows_export  = []
     total_deb = 0.0
     total_cre = 0.0
+
     for r in period:
-        deb = float(r["deb"] or 0)
-        cre = float(r["cre"] or 0)
+        deb = float(r["deb"] or 0.0)
+        cre = float(r["cre"] or 0.0)
+        bal = deb - cre
         total_deb += deb
         total_cre += cre
-        rows.append([
+        rows_display.append({
+            "account__code": r["account__code"] or "",
+            "account__name": r["account__name"] or "",
+            "deb": deb,
+            "cre": cre,
+            "balance": bal,
+        })
+        rows_export.append([
             r["account__code"] or "",
             r["account__name"] or "",
             f"{deb:.2f}",
             f"{cre:.2f}",
-            f"{(deb - cre):.2f}",
+            f"{bal:.2f}",
         ])
 
     headers = ["Code", "Name", "Debit", "Credit", "Balance"]
-    balanced = abs(total_deb - total_cre) < 0.005  # tolerance
+    total_net = total_deb - total_cre
+    balanced = abs(total_net) < 0.005  # tolerance
 
     if _is_csv(request):
-        # append totals row
-        rows.append(["TOTALS", "", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{(total_deb-total_cre):.2f}"])
-        return rows_to_csv_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows)
+        rows_export.append(["TOTALS", "", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_net:.2f}"])
+        return rows_to_csv_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows_export)
 
     if _want_xlsx(request):
-        # append totals row
-        rows.append(["TOTALS", "", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{(total_deb-total_cre):.2f}"])
-        return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows)
+        rows_export.append(["TOTALS", "", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_net:.2f}"])
+        return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows_export)
 
-    # HTML
-    from django.shortcuts import render
     context = {
-        "rows": period,           # queryset dicts for table
-        "dfrom": dfrom,
-        "dto": dto,
+        "rows": rows_display,   # <-- now contains r.balance per row
+        "dfrom": dfrom, "dto": dto,
         "code_prefix": code_prefix,
-        "total_deb": total_deb,
-        "total_cre": total_cre,
-        "balanced": balanced,
+        "total_deb": total_deb, "total_cre": total_cre,
+        "total_net": total_net, "balanced": balanced,
     }
     return render(request, "admin/accounting/reports/trial_balance.html", context)
-
-
 
