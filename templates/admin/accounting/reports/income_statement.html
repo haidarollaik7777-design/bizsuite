@@ -1,12 +1,22 @@
 ﻿{% extends "admin/base_site.html" %}
+{% load report_extras %}
 {% block content %}
   <h1>{{ title }}</h1>
+
+  <p style="margin:.25rem 0 .75rem 0">
+    Period:
+    {% if date_from %}{{ date_from|date:'Y-m-d' }}{% else %}{% now "Y-01-01" %}{% endif %}
+    →
+    {% if date_to %}{{ date_to|date:'Y-m-d' }}{% else %}{% now "Y-m-d" %}{% endif %}
+  </p>
+
   <form method="get" style="margin-bottom:1rem">
     <label>From: <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label>
     <label style="margin-left:1rem">To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
     <button class="button" type="submit">Apply</button>
     <a class="button" href="?">Clear</a>
-    <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&format=csv">Export CSV</a>
+    <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}format=csv">Export CSV</a>
+    <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}format=xlsx">Export XLSX</a>
   </form>
 
   <h2>Revenue</h2>
@@ -14,11 +24,15 @@
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Amount</th></tr></thead>
     <tbody>
       {% for r in revenue %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.amount }}</td></tr>
+        <tr>
+          <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.code }}</a></td>
+          <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.name }}</a></td>
+          <td style="text-align:right">{{ r.amount|money }}</td>
+        </tr>
       {% empty %}
         <tr><td colspan="3">No rows</td></tr>
       {% endfor %}
-      <tr><th colspan="2">Total Revenue</th><th style="text-align:right">{{ tot_rev }}</th></tr>
+      <tr><th colspan="2">Total Revenue</th><th style="text-align:right">{{ tot_rev|money }}</th></tr>
     </tbody>
   </table>
 
@@ -27,14 +41,26 @@
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Amount</th></tr></thead>
     <tbody>
       {% for r in expense %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.amount }}</td></tr>
+        <tr>
+          <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.code }}</a></td>
+          <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.name }}</a></td>
+          <td style="text-align:right">{{ r.amount|money }}</td>
+        </tr>
       {% empty %}
         <tr><td colspan="3">No rows</td></tr>
       {% endfor %}
-      <tr><th colspan="2">Total Expenses</th><th style="text-align:right">{{ tot_exp }}</th></tr>
+      <tr><th colspan="2">Total Expenses</th><th style="text-align:right">{{ tot_exp|money }}</th></tr>
     </tbody>
   </table>
 
   <h2>Net Income</h2>
-  <p><strong>{{ net_income }}</strong></p>
+  <p>
+    {% with net=net_income %}
+      {% if net|floatformat:2|slice:":1" == "-" %}
+        <span style="padding:.25rem .5rem;border-radius:8px;background:#ffeef0;color:#86181d;font-weight:600">{{ net|money }}</span>
+      {% else %}
+        <span style="padding:.25rem .5rem;border-radius:8px;background:#e6ffed;color:#1a7f37;font-weight:600">{{ net|money }}</span>
+      {% endif %}
+    {% endwith %}
+  </p>
 {% endblock %}

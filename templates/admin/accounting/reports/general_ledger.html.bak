@@ -2,12 +2,16 @@
 {% load report_extras %}
 {% block content %}
   <h1>{{ title }}</h1>
-  <form method="get" style="margin-bottom:1rem">
-    <label>From: <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label>
-    <label style="margin-left:1rem">To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
-    <button class="button" type="submit">Apply</button>
-    <a class="button" href="?">Clear</a>
-    <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}format=csv">Export CSV</a>
+  <form method="get" style="margin-bottom:1rem; display:flex; gap:1rem; align-items:end; flex-wrap:wrap">
+    <div><label>From<br><input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label></div>
+    <div><label>To<br><input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label></div>
+    <div><label>Account code (prefix)<br><input type="text" name="account_code" value="{{ account_code }}" placeholder="e.g. 1200"></label></div>
+    <div>
+      <button class="button" type="submit">Apply</button>
+      <a class="button" href="?">Clear</a>
+      <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}{% if account_code %}account_code={{ account_code }}&{% endif %}format=csv">Export CSV</a>
+      <a class="button" href="/admin/rcx/general-ledger.xlsx{% if date_from or date_to or account_code %}?{% endif %}{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endif %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}{% if account_code %}account_code={{ account_code }}{% endif %}">Export XLSX</a>
+    </div>
   </form>
 
   <table class="listtable">

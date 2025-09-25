@@ -8,6 +8,12 @@
     <a class="button" href="?">Clear</a>
     <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&format=csv">Export CSV</a>
   </form>
+  <style>
+    .tb-badge{display:inline-block;padding:0.15rem 0.4rem;border-radius:6px;font-size:12px;font-weight:600;margin-left:.35rem;}
+    .tb-ok   {background:#e6ffed;border:1px solid #2ea44f;color:#1a7f37;}
+    .tb-warn {background:#ffeef0;border:1px solid #d73a49;color:#86181d;}
+    .tb-total-row th,.tb-total-row td{font-weight:700;border-top:2px solid #888;}
+  </style>
   <table class="listtable">
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead>
     <tbody>
@@ -16,7 +22,27 @@
       {% empty %}
         <tr><td colspan="5">No data.</td></tr>
       {% endfor %}
-      <tr><th colspan="2">TOTALS</th><th style="text-align:right">{{ tot_deb }}</th><th style="text-align:right">{{ tot_cr }}</th><th style="text-align:right">{{ tot_deb }} - {{ tot_cr }}</th></tr>
+      <tr class="tb-total-row">
+  <th colspan="2">TOTALS</th>
+  <th style="text-align:right">{{ tot_deb|money }}</th>
+  <th style="text-align:right">{{ tot_cr|money }}</th>
+  <th style="text-align:right">
+    {{ tot_total|money }}
+    {% if tot_total == 0 %}
+      <span class="tb-badge tb-ok">Balanced</span>
+    {% else %}
+      <span class="tb-badge tb-warn">Out of balance</span>
+    {% endif %}
+  </th>
+</tr>
     </tbody>
   </table>
 {% endblock %}
+
+
+
+
+
+
+
+

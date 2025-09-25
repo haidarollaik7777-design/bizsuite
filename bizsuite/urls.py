@@ -221,8 +221,8 @@ def report_trial_balance(request):
         **admin.site.each_context(request),
         "title": "Trial Balance",
         "rows": rows,
-        "tot_deb": _fmt(tot_deb),
-        "tot_cr": _fmt(tot_cr),
+        "tot_deb": tot_deb,
+        "tot_cr": tot_cr, "tot_total": (tot_deb - tot_cr), "tot_total": (tot_deb - tot_cr),
         "date_from": df,
         "date_to": dt,
     })
@@ -438,3 +438,5 @@ urlpatterns = [
     # admin last
     path("admin/", admin.site.urls),
 ]
+
+

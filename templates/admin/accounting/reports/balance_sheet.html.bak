@@ -2,12 +2,22 @@
 {% load report_extras %}
 {% block content %}
   <h1>{{ title }}</h1>
+
+  <p style="margin:.25rem 0 .75rem 0">
+    As of: {{ date_to|date:'Y-m-d' }}
+    {% if tot_assets == tot_liab_equity %}
+      <span style="margin-left:.5rem;padding:.15rem .45rem;border-radius:8px;background:#e6ffed;color:#1a7f37">Balanced</span>
+    {% else %}
+      <span style="margin-left:.5rem;padding:.15rem .45rem;border-radius:8px;background:#ffeef0;color:#86181d">Out of balance</span>
+    {% endif %}
+  </p>
+
   <form method="get" style="margin-bottom:1rem">
-    <label>From: <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></label>
-    <label style="margin-left:1rem">To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
+    <label>To: <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></label>
     <button class="button" type="submit">Apply</button>
     <a class="button" href="?">Clear</a>
-    <a class="button" href="?{% if date_from %}date_from={{ date_from|date:'Y-m-d' }}&{% endfor %}{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endfor %}format=csv">Export CSV</a>
+    <a class="button" href="?{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}format=csv">Export CSV</a>
+    <a class="button" href="?{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}format=xlsx">Export XLSX</a>
   </form>
 
   <h2>Assets</h2>
@@ -15,7 +25,11 @@
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
     <tbody>
       {% for r in assets %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance|money }}</td></tr>
+        <tr>
+          <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.code }}</a></td>
+          <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.name }}</a></td>
+          <td style="text-align:right">{{ r.balance|money }}</td>
+        </tr>
       {% empty %}
         <tr><td colspan="3">No rows</td></tr>
       {% endfor %}
@@ -23,24 +37,32 @@
     </tbody>
   </table>
 
-  <h2>Liabilities</h2>
-  <table class="listtable">
-    <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
-    <tbody>
-      {% for r in liabilities %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance|money }}</td></tr>
-      {% empty %}
-        <tr><td colspan="3">No rows</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  {% if liabilities %}
+    <h2>Liabilities</h2>
+    <table class="listtable">
+      <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
+      <tbody>
+        {% for r in liabilities %}
+          <tr>
+            <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.code }}</a></td>
+            <td><a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.name }}</a></td>
+            <td style="text-align:right">{{ r.balance|money }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
 
   <h2>Equity</h2>
   <table class="listtable">
     <thead><tr><th>Code</th><th>Name</th><th style="text-align:right">Balance</th></tr></thead>
     <tbody>
       {% for r in equity %}
-        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td style="text-align:right">{{ r.balance|money }}</td></tr>
+        <tr>
+          <td>{% if r.code %}<a href="/admin/ledger/reportcenterproxy/general-ledger/?{% if date_to %}date_to={{ date_to|date:'Y-m-d' }}&{% endif %}account_code={{ r.code }}">{{ r.code }}</a>{% endif %}</td>
+          <td>{{ r.name }}</td>
+          <td style="text-align:right">{{ r.balance|money }}</td>
+        </tr>
       {% empty %}
         <tr><td colspan="3">No rows</td></tr>
       {% endfor %}
@@ -48,5 +70,3 @@
     </tbody>
   </table>
 {% endblock %}
-
-

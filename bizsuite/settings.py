@@ -49,6 +49,7 @@ TEMPLATES = [
         'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
+            'builtins': ['reports.templatetags.report_extras'],
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
@@ -158,3 +159,4 @@ if "bizsuite.accounting" not in INSTALLED_APPS and "accounting" not in INSTALLED
 # Configure which model is the GL entry (by APP LABEL, not module path)
 LEDGER_ENTRY_MODEL = "accounting.LedgerEntry"
 # ---- End Bizsuite GL auto-added ----
+
