@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+{% block extrahead %}{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // Only on our proxy report pages
+  var p = window.location.pathname || "";
+  if (!/\/admin\/ledger\/reportcenterproxy\/(trial-balance|general-ledger)\//i.test(p)) return;
+
+  // Keep current filters
+  var qs = window.location.search.replace(/^\?/, "");
+
+  // Find the CSV button to place after (fallback: put under the heading)
+  function addXlsx(slug){
+    var btn = document.createElement('a');
+    btn.className = 'button';
+    btn.textContent = 'Export XLSX';
+    btn.href = '/admin/rcx/' + slug + '.xlsx' + (qs ? '?' + qs : '');
+
+    var anchors = Array.from(document.querySelectorAll('a'));
+    var csv = anchors.find(a => /Export\s+CSV/i.test(a.textContent || ''));
+    if (csv && csv.parentNode){
+      // insert right after CSV
+      if (csv.nextSibling) csv.parentNode.insertBefore(btn, csv.nextSibling);
+      else csv.parentNode.appendChild(btn);
+    } else {
+      // fallback toolbar under H1/H2
+      var h = document.querySelector('h1,h2');
+      if (h && h.parentNode){
+        var bar = document.createElement('div');
+        bar.style = 'margin:10px 0; display:flex; gap:8px; flex-wrap:wrap;';
+        bar.appendChild(btn);
+        h.parentNode.insertBefore(bar, h.nextElementSibling);
+      }
+    }
+  }
+
+  if (p.indexOf('/trial-balance/') >= 0) addXlsx('trial-balance');
+  if (p.indexOf('/general-ledger/') >= 0) addXlsx('general-ledger');
+});
+</script>
+{% endblock %}
