@@ -1,4 +1,5 @@
-﻿from django.urls import path, include
+﻿from django.views.generic.base import RedirectView
+from django.urls import path, include
 from django.contrib import admin
 from django.urls import path, reverse
 from django.shortcuts import render, redirect
@@ -427,6 +428,8 @@ def rc_dispatch(request, report_id):
 
 # ---------- routes ----------
 urlpatterns = [
+    path('admin/rcx/trial-balance.xlsx', RedirectView.as_view(url='/admin/ledger/reportcenterproxy/trial-balance/?format=xlsx', query_string=True), name='tb_xlsx_short'),
+    path('admin/rcx/general-ledger.xlsx', RedirectView.as_view(url='/admin/ledger/reportcenterproxy/general-ledger/?format=xlsx', query_string=True), name='gl_xlsx_short'),
     path('admin/reports/', include('reports.urls')),
     # explicit reports first (so they win)
     path("admin/ledger/reportcenterproxy/trial-balance/",     admin.site.admin_view(report_trial_balance),    name="ledger_trial_balance"),
@@ -440,6 +443,7 @@ urlpatterns = [
     # admin last
     path("admin/", admin.site.urls),
 ]
+
 
 
 
