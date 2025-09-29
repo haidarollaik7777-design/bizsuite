@@ -4,7 +4,7 @@ from openpyxl.utils import get_column_letter
 
 def rows_to_xlsx_response(filename: str, headers: list[str], rows: list[list]):
     wb = Workbook()
-    .freeze_panes = "A2"
+    ws = wb.active
     ws.title = "Report"
     ws.append(headers)
     for r in rows:
@@ -21,18 +21,4 @@ def rows_to_xlsx_response(filename: str, headers: list[str], rows: list[list]):
     safe = filename.replace(" ", "_").replace("/", "_")
     resp["Content-Disposition"] = f'attachment; filename="{safe}.xlsx"'
     wb.save(resp)
-    "
-    # add simple money formatting
-    try:
-        from openpyxl.utils import get_column_letter
-        if headers:
-            money_headers = {"debit","credit","balance","amount","total","net income"}
-            for idx, h in enumerate(headers, start=1):
-                if str(h).strip().lower() in money_headers:
-                    for cell in ws[get_column_letter(idx)]:
-                        if isinstance(cell.value, (int, float)):
-                            cell.number_format = "#,##0.00"
-    except Exception:
-        pass
-    return resp"
-
+    return resp
