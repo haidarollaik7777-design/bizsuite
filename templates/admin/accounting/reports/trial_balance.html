@@ -1,15 +1,15 @@
-﻿{% extends "admin/base_site.html" %}
+{% extends "admin/base_site.html" %}
 {% block content %}
 <h1>Trial Balance</h1>
 <form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:12px 0;">
   <div><label>From</label><input type="date" name="from" value="{{ dfrom|date:'Y-m-d' }}"></div>
   <div><label>To</label><input type="date" name="to" value="{{ dto|date:'Y-m-d' }}"></div>
-  <div><label>Account code (prefix)</label><input type="text" name="code_prefix" placeholder="e.g. 1200" value="{{ code_prefix }}"></div>
+  <div><label>Account code (prefix)</label><input name="code_prefix" value="{{ code_prefix }}" placeholder="e.g. 1200"></div>
   <div style="display:flex; gap:8px;">
     <button type="submit">Apply</button>
     <a class="button" href="{{ request.path }}">Clear</a>
-    <a class="button" target="_blank" rel="noopener" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
-    <a class="button" target="_blank" rel="noopener" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=xlsx">Export XLSX</a>
+    <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
+    <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=xlsx">Export XLSX</a>
   </div>
 </form>
 
@@ -24,11 +24,11 @@
   <tbody>
     {% for r in rows %}
       <tr>
-        <td style="padding:6px;">{{ r.code }}</td>
-        <td style="padding:6px;">{{ r.name }}</td>
+        <td style="padding:6px;">{{ r.account__code }}</td>
+        <td style="padding:6px;">{{ r.account__name }}</td>
         <td style="text-align:right; padding:6px;">{{ r.deb|floatformat:2 }}</td>
         <td style="text-align:right; padding:6px;">{{ r.cre|floatformat:2 }}</td>
-        <td style="text-align:right; padding:6px;">{{ r.bal|floatformat:2 }}</td>
+        <td style="text-align:right; padding:6px;">{{ r.deb|floatformat:2|default:"0.00" }}{% comment %}balance shown from export; here omit arithmetic{% endcomment %}</td>
       </tr>
     {% empty %}
       <tr><td colspan="5" style="padding:6px;">No rows.</td></tr>
@@ -45,7 +45,3 @@
   </tfoot>
 </table>
 {% endblock %}
-
-
-
-

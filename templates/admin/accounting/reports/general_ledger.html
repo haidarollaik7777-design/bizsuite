@@ -4,13 +4,12 @@
 <form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:12px 0;">
   <div><label>From</label><input type="date" name="from" value="{{ dfrom|date:'Y-m-d' }}"></div>
   <div><label>To</label><input type="date" name="to" value="{{ dto|date:'Y-m-d' }}"></div>
-  <div><label>Account code (prefix)</label><input type="text" name="code_prefix" placeholder="e.g. 1200" value="{{ code_prefix }}"></div>
-  {% if account_id %}<input type="hidden" name="account" value="{{ account_id }}">{% endif %}
+  <div><label>Account code (prefix)</label><input name="code_prefix" value="{{ code_prefix }}" placeholder="e.g. 1200"></div>
   <div style="display:flex; gap:8px;">
     <button type="submit">Apply</button>
     <a class="button" href="{{ request.path }}">Clear</a>
-    <a class="button" target="_blank" rel="noopener" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}{% if account_id %}&account={{ account_id }}{% endif %}&format=csv">Export CSV</a>
-    <a class="button" target="_blank" rel="noopener" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}{% if account_id %}&account={{ account_id }}{% endif %}&format=xlsx">Export XLSX</a>
+    <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
+    <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=xlsx">Export XLSX</a>
   </div>
 </form>
 
@@ -24,14 +23,14 @@
     <th style="text-align:left; padding:6px;">Memo</th>
   </tr></thead>
   <tbody>
-    {% for r in lines %}
+    {% for ln in lines %}
       <tr>
-        <td style="padding:6px;">{{ r.date }}</td>
-        <td style="padding:6px;">{{ r.code }}</td>
-        <td style="padding:6px;">{{ r.name }}</td>
-        <td style="text-align:right; padding:6px;">{{ r.deb|floatformat:2 }}</td>
-        <td style="text-align:right; padding:6px;">{{ r.cre|floatformat:2 }}</td>
-        <td style="padding:6px;">{{ r.memo }}</td>
+        <td style="padding:6px;">{{ ln.date|date:"Y-m-d" }}</td>
+        <td style="padding:6px;">{{ ln.account.code }}</td>
+        <td style="padding:6px;">{{ ln.account.name }}</td>
+        <td style="text-align:right; padding:6px;">{{ ln.debit|floatformat:2 }}</td>
+        <td style="text-align:right; padding:6px;">{{ ln.credit|floatformat:2 }}</td>
+        <td style="padding:6px;">{{ ln.memo }}</td>
       </tr>
     {% empty %}
       <tr><td colspan="6" style="padding:6px;">No rows.</td></tr>
