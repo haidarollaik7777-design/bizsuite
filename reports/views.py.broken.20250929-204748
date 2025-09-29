@@ -1,4 +1,5 @@
-﻿from decimal import Decimal
+﻿from django.contrib.admin.views.decorators import staff_member_required
+from decimal import Decimal
 from django.conf import settings
 from django.apps import apps as dj_apps
 from django.utils import timezone
@@ -47,6 +48,8 @@ def _coalesce0(fieldname):
     return Coalesce(Sum(fieldname), Value(Decimal("0.00"), output_field=DecimalField(max_digits=18, decimal_places=2)))
 
 # ---- reports ----
+
+@staff_member_required
 
 def report_trial_balance(request):
     Posting, cfg = _posting_model_and_fields()
@@ -101,40 +104,28 @@ def report_trial_balance(request):
     return render(request, "admin/accounting/reports/trial_balance.html", ctx)
 
 
-def report_general_ledger(request):
-    Posting, cfg = _posting_model_and_fields()
-    dfrom, dto = _date_range(request)
-    code_prefix = (request.GET.get("code_prefix") or "").strip()
+@staff_member_required
 
-    base = Posting.objects.select_related(cfg["account"]).filter(**{
-        f"{cfg['date']}__gte": dfrom,
-        f"{cfg['date']}__lte": dto,
-    })
-    if code_prefix:
-        base = base.filter(**{f"{cfg['account']}__code__startswith": code_prefix})
 
-    q = base.order_by(cfg["date"], "id")
-    # export rows
-    headers = ["Date","Code","Name","Debit","Credit","Memo"]
-    xrows = []
-    for ln in q:
-        ac = getattr(ln, cfg["account"])
-        memo = getattr(ln, "memo", "") or ""
-        xrows.append([
-            (_get_attr_path(ln, cfg["date"]) or ln.entry.date).isoformat(),
-            getattr(ac, "code", "") if ac else "",
-            getattr(ac, "name", "") if ac else "",
-            f"{Decimal(getattr(ln, cfg['debit']) or 0):.2f}",
-            f"{Decimal(getattr(ln, cfg['credit']) or 0):.2f}",
-            memo[:500],
-        ])
-    if _is_csv(request):
-        return rows_to_csv_response(f"general_ledger_{dfrom}_to_{dto}", headers, xrows)
-    if _want_xlsx(request):
-        return rows_to_xlsx_response(f"general_ledger_{dfrom}_to_{dto}", headers, xrows)
 
-    ctx = dict(lines=q, dfrom=dfrom, dto=dto, code_prefix=code_prefix)
-    return render(request, "admin/accounting/reports/general_ledger.html", ctx)
+    $body = $matches[1]
+    $body = $body -replace "q\s*=\s*q\.order_by\([^\)]*\)\.distinct\(\)", "q = q.order_by(""entry__date"",""entry_id"",""id"").distinct()"
+    $inject = @"
+    # UI row limit (no limit for export)
+    try:
+        limit = int(request.GET.get("limit") or 5000)
+    except Exception:
+        limit = 5000
+    is_export = _is_csv(request) or _want_xlsx(request)
+    if not is_export:
+        q = q[:limit]
+"@
+    "def report_general_ledger(request):`r`n    " + ($body.Trim() -replace "`r`n","\r\n    ") -replace "(\s*)# Build rows once for exports", $inject + "`r`n    # Build rows once for exports" + "`r`n" + "    " | Out-Null
+    return $matches[0] -replace [regex]::Escape($matches[1]), ($body -replace "(?s)\A", $inject)
+  
+
+
+@staff_member_required
 
 
 def report_income_statement(request):
@@ -189,6 +180,9 @@ def report_income_statement(request):
     ctx = dict(dfrom=dfrom, dto=dto, rev_rows=rev_rows, exp_rows=exp_rows,
                total_rev=total_rev, total_exp=total_exp, net_income=net_income)
     return render(request, "admin/accounting/reports/income_statement.html", ctx)
+
+
+@staff_member_required
 
 
 def report_balance_sheet(request):
@@ -272,4 +266,5 @@ def redirect_rc_slug(request, report_id: str):
     if qs:
         new += f"?{qs}"
     return redirect(new)
+
 
