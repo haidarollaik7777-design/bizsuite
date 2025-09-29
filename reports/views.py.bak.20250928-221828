@@ -1,4 +1,4 @@
-﻿from django.db.models import Sum, Value, DecimalField
+from django.db.models import Sum, Value, DecimalField
 from django.conf import settings
 from django.http import HttpResponse
 from django.db.models.functions import Coalesce
@@ -112,7 +112,9 @@ def _date_range(request):
         dto   = safe_date(dto, today)
     return dfrom, dto
 def report_general_ledger(request):
-    """General Ledger page + CSV/XLSX export using Posting schema (fallback to JournalLine)."""
+    """General Ledger export via Posting schema; HTML stub in this restore."""
+    if not (_is_csv(request) or _want_xlsx(request)):
+        return HttpResponse("General Ledger HTML not implemented in this restore point. Use ?format=csv or ?format=xlsx.", status=501, content_type="text/plain")
     try:
         Posting, date_f, debit_f, credit_f, acct_fk, AccountModel, code_f, name_f = _get_posting_schema()
     except Exception as e:
@@ -128,53 +130,31 @@ def report_general_ledger(request):
         q = q.filter(**{f"{acct_fk}_id": account_id})
     if code_prefix and code_f:
         q = q.filter(**{f"{acct_fk}__{code_f}__startswith": code_prefix})
-    q = q.order_by(date_f, "id")
 
-    # Build rows (shared)
-    def _date_to_str(val):
-        try:
-            return val.isoformat()[:10] if hasattr(val, "isoformat") else (val or "")
-        except Exception:
-            return str(val or "")
+    fields = [date_f, f"{acct_fk}__{code_f}", f"{acct_fk}__{name_f}", debit_f, credit_f]
+    q = q.values(*fields).order_by(date_f, "id")
 
+    headers = ["Date","Code","Name","Debit","Credit","Memo"]
     rows = []
-    for p in q:
-        dt = getattr(p, date_f.split("__")[0], None) if "__" not in date_f else None
-        # robust: fetch via values dict when date is related (entry__date)
-        if dt is None:
-            # fallback: query value via dict approach
-            from django.db.models import F, Value as V
-        acct = getattr(p, acct_fk, None)
-        code = getattr(acct, code_f, "") if acct is not None else ""
-        name = getattr(acct, name_f, "") if acct is not None else ""
-        deb  = getattr(p, debit_f, 0) or 0
-        cre  = getattr(p, credit_f, 0) or 0
-        memo = getattr(p, "memo", "") or ""
-        # safer date fetch
+    for r in q:
+        ds = r.get(date_f, "")
         try:
-            dval = getattr(p, date_f.replace("__", "_"), None)
-            ds = _date_to_str(dval) if dval is not None else ""
+            ds = ds.isoformat()[:10] if hasattr(ds, "isoformat") else (ds or "")
         except Exception:
-            ds = ""
-        rows.append({"date": ds, "code": str(code), "name": str(name),
-                     "deb": float(deb), "cre": float(cre), "memo": memo[:500]})
+            ds = str(ds or "")
+        code = str(r.get(f"{acct_fk}__{code_f}", "") or "")
+        name = str(r.get(f"{acct_fk}__{name_f}", "") or "")
+        deb  = float(r.get(debit_f) or 0.0)
+        cre  = float(r.get(credit_f) or 0.0)
+        rows.append([ds, code, name, f"{deb:.2f}", f"{cre:.2f}", ""])
 
+    fname = f"general_ledger_{dfrom}_to_{dto}"
     if _is_csv(request):
-        hdrs = ["Date","Code","Name","Debit","Credit","Memo"]
-        data = [[r["date"], r["code"], r["name"], f"{r['deb']:.2f}", f"{r['cre']:.2f}", r["memo"]] for r in rows]
-        return rows_to_csv_response(f"general_ledger_{dfrom}_to_{dto}", hdrs, data)
+        return rows_to_csv_response(fname, headers, rows)
     if _want_xlsx(request):
-        hdrs = ["Date","Code","Name","Debit","Credit","Memo"]
-        data = [[r["date"], r["code"], r["name"], f"{r['deb']:.2f}", f"{r['cre']:.2f}", r["memo"]] for r in rows]
-        return rows_to_xlsx_response(f"general_ledger_{dfrom}_to_{dto}", hdrs, data)
+        return rows_to_xlsx_response(fname, headers, rows)
+    return HttpResponse("Unsupported request", status=400, content_type="text/plain")
 
-    # HTML
-    context = {
-        "lines": rows,
-        "dfrom": dfrom, "dto": dto,
-        "account_id": account_id, "code_prefix": code_prefix,
-    }
-    return render(request, "admin/accounting/reports/general_ledger.html", context)
 
 def report_income_statement(request):
     return HttpResponse("Income Statement not implemented in this restore point.", status=501, content_type="text/plain")
@@ -244,104 +224,43 @@ def _get_posting_schema():
             name_f = code_f
 
     return Posting, date_f, debit_f, credit_f, acct_fk, AccountModel, code_f, name_f
-
-        "rows": rows,
-        "dfrom": dfrom, "dto": dto,
-        "code_prefix": code_prefix,
-        "total_deb": total_deb, "total_cre": total_cre,
-        "balanced": abs(total_deb - total_cre) < 0.005,,
-        "total_bal": total_deb - total_cre,
-    request, "admin/accounting/reports/trial_balance.html", context)
-
-
-def _posting_model_and_fields():
-    # Uses settings.REPORTS_POSTING to discover the Posting model and field names
-    from django.conf import settings
-    from django.apps import apps as dj_apps
-    cfg = getattr(settings, "REPORTS_POSTING", {
-        "model": "ledger.Posting",
-        "date": "date",
-        "account": "account",
-        "debit": "debit",
-        "credit": "credit",
-    })
-    app_label, model_name = cfg["model"].split(".")
-    Model = dj_apps.get_model(app_label, model_name)
-    return Model, cfg
 def report_trial_balance(request):
-    from django.shortcuts import render
-    from decimal import Decimal
-
-    Posting, cfg = _posting_model_and_fields()
+    """Trial Balance export via Posting schema; HTML stub in this restore."""
+    if not (_is_csv(request) or _want_xlsx(request)):
+        return HttpResponse("Trial Balance HTML not implemented in this restore point. Use ?format=csv or ?format=xlsx.", status=501, content_type="text/plain")
+    try:
+        Posting, date_f, debit_f, credit_f, acct_fk, AccountModel, code_f, name_f = _get_posting_schema()
+    except Exception as e:
+        return HttpResponse(f"Posting schema error: {e}", status=500, content_type="text/plain")
 
     dfrom, dto = _date_range(request)
     code_prefix = (request.GET.get("code_prefix") or "").strip()
 
-    base = Posting.objects.filter(**{
-        f"{cfg['date']}__gte": dfrom,
-        f"{cfg['date']}__lte": dto,
-    })
-    if code_prefix:
-        base = base.filter(**{f"{cfg['account']}__code__startswith": code_prefix})
+    q = Posting.objects.select_related(acct_fk).filter(**{f"{date_f}__gte": dfrom, f"{date_f}__lte": dto})
+    if code_prefix and code_f:
+        q = q.filter(**{f"{acct_fk}__{code_f}__startswith": code_prefix})
 
-    agg = (
-        base.values("account_id", "account__code", "account__name")
-            .annotate(
-                deb=Coalesce(
-                    Sum(cfg["debit"]),
-                    Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
-                ),
-                cre=Coalesce(
-                    Sum(cfg["credit"]),
-                    Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
-                ),
-            )
-            .order_by("account__code")
-    )
+    # IMPORTANT: type the zero constant as DecimalField to avoid mixed-type error
+    dec0 = Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
 
-    period = list(agg)
+    agg = (q.values(f"{acct_fk}_id", f"{acct_fk}__{code_f}", f"{acct_fk}__{name_f}")
+             .annotate(deb=Coalesce(Sum(debit_f), dec0),
+                       cre=Coalesce(Sum(credit_f), dec0))
+             .order_by(f"{acct_fk}__{code_f}"))
 
-    total_deb = sum((r["deb"] or Decimal("0")) for r in period)
-    total_cre = sum((r["cre"] or Decimal("0")) for r in period)
-    total_bal = total_deb - total_cre
-    balanced = abs(total_bal) < Decimal("0.005")
+    headers = ["Code","Name","Debit","Credit","Balance"]
+    rows, total_deb, total_cre = [], 0.0, 0.0
+    for r in agg:
+        code = str(r.get(f"{acct_fk}__{code_f}", "") or "")
+        name = str(r.get(f"{acct_fk}__{name_f}", "") or "")
+        deb = float(r["deb"] or 0.0); total_deb += deb
+        cre = float(r["cre"] or 0.0); total_cre += cre
+        rows.append([code, name, f"{deb:.2f}", f"{cre:.2f}", f"{(deb - cre):.2f}"])
 
-    # Build export rows
-    export_rows = []
-    for r in period:
-        deb = r["deb"] or Decimal("0")
-        cre = r["cre"] or Decimal("0")
-        export_rows.append([
-            r.get("account__code") or "",
-            r.get("account__name") or "",
-            f"{deb:.2f}",
-            f"{cre:.2f}",
-            f"{(deb - cre):.2f}",
-        ])
-
-    headers = ["Code", "Name", "Debit", "Credit", "Balance"]
-
-    # CSV export
+    rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{(total_deb-total_cre):.2f}"])
+    fname = f"trial_balance_{dfrom}_to_{dto}"
     if _is_csv(request):
-        export_rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
-        return rows_to_csv_response(f"trial_balance_{dfrom}_to_{dto}", headers, export_rows)
-
-    # XLSX export
+        return rows_to_csv_response(fname, headers, rows)
     if _want_xlsx(request):
-        export_rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
-        return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, export_rows)
-
-    # HTML page
-    context = {
-        "rows": period,
-        "dfrom": dfrom,
-        "dto": dto,
-        "code_prefix": code_prefix,
-        "total_deb": total_deb,
-        "total_cre": total_cre,
-        "total_bal": total_bal,
-        "balanced": balanced,
-    }
-    return render(request, "admin/accounting/reports/trial_balance.html", context)
-
-
+        return rows_to_xlsx_response(fname, headers, rows)
+    return HttpResponse("Unsupported request", status=400, content_type="text/plain")

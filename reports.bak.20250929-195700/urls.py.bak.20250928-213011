@@ -1,0 +1,9 @@
+﻿from django.urls import path
+from . import views
+
+urlpatterns = [
+    # Trial Balance
+    path("trial-balance/", views.report_trial_balance, name="report_trial_balance"),
+    path("export/csv/trial-balance/", views.report_trial_balance, name="csv_trial_balance"),
+    path("export/xlsx/trial-balance/", views.report_trial_balance, name="xlsx_trial_balance"),
+]

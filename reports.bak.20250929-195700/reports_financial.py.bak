@@ -1,0 +1,215 @@
+﻿# reports/reports_financial.py
+from datetime import date
+from typing import Optional, Dict, Any, List, Tuple
+
+from django.db.models import Sum
+from django.utils.dateparse import parse_date
+from django.db.models import Model
+
+from ledger.models import LedgerEntry, Account
+
+def _parse_dates(date_from: Optional[str], date_to: Optional[str]) -> Tuple[Optional[date], Optional[date]]:
+    df = parse_date(date_from) if date_from else None
+    dt = parse_date(date_to) if date_to else None
+    return df, dt
+
+def _field_names(m: Model) -> List[str]:
+    return [f.name for f in m._meta.get_fields() if hasattr(f, "name")]
+
+def _pick_class_field() -> Optional[str]:
+    candidates = ["type","account_type","category","kind","group","class_name","nature"]
+    names = set(_field_names(Account))
+    for c in candidates:
+        if c in names:
+            return c
+    return None
+
+def _acc_type_of(acc) -> Optional[str]:
+    fld = _pick_class_field()
+    if not fld:
+        return None
+    val = getattr(acc, fld, None)
+    if val is None:
+        return None
+    s = str(val).strip().lower()
+    mapping = {
+        # assets/liabilities/equity
+        "assets":"asset", "asset":"asset", "a":"asset", "1":"asset",
+        "liabilities":"liability","liability":"liability","l":"liability","2":"liability",
+        "equity":"equity","capital":"equity","owner equity":"equity","e":"equity","3":"equity",
+        # revenue / income variants
+        "revenue":"revenue","income":"revenue","sales":"revenue","sales revenue":"revenue",
+        "r":"revenue","4":"revenue","7":"revenue",
+        # expense variants
+        "expense":"expense","expenses":"expense","operating expense":"expense",
+        "admin expense":"expense","selling expense":"expense",
+        "purchases":"expense","purchase":"expense","cogs":"expense","cost of goods sold":"expense",
+        "cost of sales":"expense","direct costs":"expense","indirect costs":"expense",
+        "x":"expense","5":"expense","6":"expense","8":"expense","9":"expense",
+    }
+    return mapping.get(s, s)
+
+def _guess_type_by_code(acc) -> Optional[str]:
+    code = getattr(acc, "code", None)
+    if code is None:
+        return None
+    s = str(code).strip()
+    if not s:
+        return None
+    first = s[0]
+    if first == "1": return "asset"
+    if first == "2": return "liability"
+    if first == "3": return "equity"
+    if first in ("4","7"): return "revenue"
+    if first in ("5","6","8","9"): return "expense"
+    return None
+
+def _logical_type(acc) -> Optional[str]:
+    return _acc_type_of(acc) or _guess_type_by_code(acc)
+
+def _sum_account_in_qs(acc, qs):
+    return qs.filter(account=acc).aggregate(total=Sum("amount"))["total"] or 0
+
+def _debug_snapshot(qs, limit=25):
+    data = []
+    for acc in Account.objects.order_by("code")[:limit]:
+        s = _sum_account_in_qs(acc, qs)
+        data.append({"code": getattr(acc,"code",""), "name": getattr(acc,"name",""),
+                     "dtype": _logical_type(acc) or "?", "sum": float(s)})
+    return data
+
+def build_trial_balance(date_from: Optional[str], date_to: Optional[str]) -> Dict[str, Any]:
+    df, dt = _parse_dates(date_from, date_to)
+    qs = LedgerEntry.objects.all()
+    if df: qs = qs.filter(entry_date__gte=df)
+    if dt: qs = qs.filter(entry_date__lte=dt)
+
+    rows = []
+    for acc in Account.objects.order_by("code"):
+        s_debit = qs.filter(account=acc, amount__gt=0).aggregate(total=Sum("amount"))["total"] or 0
+        s_credit = qs.filter(account=acc, amount__lt=0).aggregate(total=Sum("amount"))["total"] or 0
+        s_credit = abs(s_credit)
+        balance = s_debit - s_credit
+        if s_debit or s_credit or balance:
+            rows.append({
+                "account_code": acc.code,
+                "account_name": acc.name,
+                "debit": float(s_debit),
+                "credit": float(s_credit),
+                "balance": float(balance),
+            })
+    return {
+        "title": "Trial Balance",
+        "rows": rows,
+        "columns": ["account_code","account_name","debit","credit","balance"],
+        "date_from": df, "date_to": dt,
+    }
+
+def build_general_ledger(date_from: Optional[str], date_to: Optional[str]) -> Dict[str, Any]:
+    df, dt = _parse_dates(date_from, date_to)
+    qs = LedgerEntry.objects.select_related("account").order_by("entry_date","id")
+    if df: qs = qs.filter(entry_date__gte=df)
+    if dt: qs = qs.filter(entry_date__lte=dt)
+    rows = []
+    for le in qs:
+        amt = float(le.amount or 0)
+        rows.append({
+            "date": le.entry_date.isoformat(),
+            "account_code": le.account.code,
+            "account_name": le.account.name,
+            "debit": amt if amt > 0 else 0.0,
+            "credit": abs(amt) if amt < 0 else 0.0,
+            "memo": le.memo or "",
+            "doc_no": getattr(le, "doc_no", "") or "",
+        })
+    return {
+        "title": "General Ledger",
+        "rows": rows,
+        "columns": ["date","account_code","account_name","debit","credit","memo","doc_no"],
+        "date_from": df, "date_to": dt,
+    }
+
+def build_balance_sheet(date_from: Optional[str], date_to: Optional[str]) -> Dict[str, Any]:
+    _, dt = _parse_dates(date_from, date_to)
+    cutoff = dt
+    qs = LedgerEntry.objects.select_related("account")
+    if cutoff:
+        qs = qs.filter(entry_date__lte=cutoff)
+
+    rows: List[Dict[str, Any]] = []
+    totals = {"asset": 0.0, "liability": 0.0, "equity": 0.0}
+
+    for acc in Account.objects.order_by("code"):
+        t = _logical_type(acc)
+        if t not in ("asset","liability","equity"):
+            continue
+        s = _sum_account_in_qs(acc, qs)
+        value = float(s if t == "asset" else -s)
+        if value != 0:
+            label = "Assets" if t == "asset" else ("Liabilities" if t == "liability" else "Equity")
+            rows.append({"section": label, "account_code": acc.code, "account_name": acc.name, "amount": value})
+            totals[t] += value
+
+    # Roll current earnings into Equity
+    revenue_total = 0.0
+    expense_total = 0.0
+    for acc in Account.objects.order_by("code"):
+        t = _logical_type(acc)
+        if t == "revenue":
+            s = _sum_account_in_qs(acc, qs)
+            revenue_total += float(-s)
+        elif t == "expense":
+            s = _sum_account_in_qs(acc, qs)
+            expense_total += float(s)
+
+    net = revenue_total - expense_total
+    if net != 0:
+        rows.append({"section": "Equity", "account_code": "", "account_name": "Retained Earnings (to date)", "amount": net})
+        totals["equity"] += net
+
+    rows.append({"section": "Totals", "account_code": "", "account_name": "Total Assets", "amount": totals["asset"]})
+    rows.append({"section": "Totals", "account_code": "", "account_name": "Total Liabilities + Equity", "amount": totals["liability"] + totals["equity"]})
+
+    return {
+        "title": "Balance Sheet",
+        "rows": rows,
+        "columns": ["section","account_code","account_name","amount"],
+        "date_from": None, "date_to": cutoff,
+    }
+
+def build_income_statement(date_from: Optional[str], date_to: Optional[str]) -> Dict[str, Any]:
+    df, dt = _parse_dates(date_from, date_to)
+    qs = LedgerEntry.objects.select_related("account")
+    if df: qs = qs.filter(entry_date__gte=df)
+    if dt: qs = qs.filter(entry_date__lte=dt)
+
+    rows: List[Dict[str, Any]] = []
+    revenue_total = 0.0
+    expense_total = 0.0
+
+    for acc in Account.objects.order_by("code"):
+        t = _logical_type(acc)
+        if t == "revenue":
+            s = _sum_account_in_qs(acc, qs)
+            v = float(-s)            # credit-nature -> positive
+            if v != 0:
+                rows.append({"section": "Revenue", "account_code": acc.code, "account_name": acc.name, "amount": v})
+            revenue_total += v
+        elif t == "expense":
+            s = _sum_account_in_qs(acc, qs)
+            v = float(s)             # debit-nature
+            if v != 0:
+                rows.append({"section": "Expense", "account_code": acc.code, "account_name": acc.name, "amount": v})
+            expense_total += v
+
+    net = revenue_total - expense_total
+    rows.append({"section": "Totals", "account_code": "", "account_name": "Total Revenue", "amount": revenue_total})
+    rows.append({"section": "Totals", "account_code": "", "account_name": "Total Expenses", "amount": expense_total})
+    rows.append({"section": "Totals", "account_code": "", "account_name": "Net Income", "amount": net})
+
+    return {
+        "title": "Income Statement",
+        "rows": rows,
+        "columns": ["section","account_code","account_name","amount"],
+        "date_from": df, "date_to": dt,
+    }

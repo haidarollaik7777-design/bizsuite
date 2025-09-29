@@ -284,20 +284,14 @@ def report_trial_balance(request):
     if code_prefix:
         base = base.filter(**{f"{cfg['account']}__code__startswith": code_prefix})
 
-    agg = (
-        base.values("account_id", "account__code", "account__name")
-            .annotate(
-                deb=Coalesce(
-                    Sum(cfg["debit"]),
-                    Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
-                ),
-                cre=Coalesce(
-                    Sum(cfg["credit"]),
-                    Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
-                ),
-            )
-            .order_by("account__code")
-    )
+    agg = (base.values("account_id", "account__code", "account__name")
+               .annotate(
+                   deb=Coalesce(Sum(cfg["debit"]),
+                                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))),
+                   cre=Coalesce(Sum(cfg["credit"]),
+                                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))),
+               )
+               .order_by("account__code"))
 
     period = list(agg)
 
@@ -319,19 +313,18 @@ def report_trial_balance(request):
             f"{(deb - cre):.2f}",
         ])
 
-    headers = ["Code", "Name", "Debit", "Credit", "Balance"]
+    headers = ["Code","Name","Debit","Credit","Balance"]
 
-    # CSV export
+    # CSV/XLSX export
     if _is_csv(request):
         export_rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
         return rows_to_csv_response(f"trial_balance_{dfrom}_to_{dto}", headers, export_rows)
 
-    # XLSX export
     if _want_xlsx(request):
         export_rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
         return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, export_rows)
 
-    # HTML page
+    # HTML
     context = {
         "rows": period,
         "dfrom": dfrom,
@@ -343,5 +336,4 @@ def report_trial_balance(request):
         "balanced": balanced,
     }
     return render(request, "admin/accounting/reports/trial_balance.html", context)
-
 

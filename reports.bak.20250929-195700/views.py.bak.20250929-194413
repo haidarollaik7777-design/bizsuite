@@ -268,36 +268,34 @@ def _posting_model_and_fields():
     app_label, model_name = cfg["model"].split(".")
     Model = dj_apps.get_model(app_label, model_name)
     return Model, cfg
+
 def report_trial_balance(request):
     from django.shortcuts import render
     from decimal import Decimal
-
     Posting, cfg = _posting_model_and_fields()
 
     dfrom, dto = _date_range(request)
     code_prefix = (request.GET.get("code_prefix") or "").strip()
 
+    # Base queryset by date
     base = Posting.objects.filter(**{
         f"{cfg['date']}__gte": dfrom,
         f"{cfg['date']}__lte": dto,
     })
+
+    # Optional account code prefix filter
     if code_prefix:
         base = base.filter(**{f"{cfg['account']}__code__startswith": code_prefix})
 
-    agg = (
-        base.values("account_id", "account__code", "account__name")
-            .annotate(
-                deb=Coalesce(
-                    Sum(cfg["debit"]),
-                    Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
-                ),
-                cre=Coalesce(
-                    Sum(cfg["credit"]),
-                    Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
-                ),
-            )
-            .order_by("account__code")
-    )
+    # Aggregate per account (keep keys 'account__code' / 'account__name' for template compatibility)
+    agg = (base.values("account_id", "account__code", "account__name")
+               .annotate(
+                   deb=Coalesce(Sum(cfg["debit"]),
+                                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))),
+                   cre=Coalesce(Sum(cfg["credit"]),
+                                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))),
+               )
+               .order_by("account__code"))
 
     period = list(agg)
 
@@ -307,11 +305,11 @@ def report_trial_balance(request):
     balanced = abs(total_bal) < Decimal("0.005")
 
     # Build export rows
-    export_rows = []
+    rows = []
     for r in period:
         deb = r["deb"] or Decimal("0")
         cre = r["cre"] or Decimal("0")
-        export_rows.append([
+        rows.append([
             r.get("account__code") or "",
             r.get("account__name") or "",
             f"{deb:.2f}",
@@ -319,29 +317,23 @@ def report_trial_balance(request):
             f"{(deb - cre):.2f}",
         ])
 
-    headers = ["Code", "Name", "Debit", "Credit", "Balance"]
+    headers = ["Code","Name","Debit","Credit","Balance"]
 
-    # CSV export
     if _is_csv(request):
-        export_rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
-        return rows_to_csv_response(f"trial_balance_{dfrom}_to_{dto}", headers, export_rows)
+        rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
+        return rows_to_csv_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows)
 
-    # XLSX export
     if _want_xlsx(request):
-        export_rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
-        return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, export_rows)
+        rows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
+        return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, rows)
 
-    # HTML page
     context = {
         "rows": period,
-        "dfrom": dfrom,
-        "dto": dto,
+        "dfrom": dfrom, "dto": dto,
         "code_prefix": code_prefix,
-        "total_deb": total_deb,
-        "total_cre": total_cre,
+        "total_deb": total_deb, "total_cre": total_cre,
         "total_bal": total_bal,
         "balanced": balanced,
     }
     return render(request, "admin/accounting/reports/trial_balance.html", context)
-
 

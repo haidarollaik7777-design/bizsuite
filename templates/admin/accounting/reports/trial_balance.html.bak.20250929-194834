@@ -1,41 +1,50 @@
-{% extends "admin/base_site.html" %}
+﻿{% extends "admin/base_site.html" %}
 {% block content %}
-<h1>General Ledger</h1>
+<h1>Trial Balance</h1>
 <form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:12px 0;">
   <div><label>From</label><input type="date" name="from" value="{{ dfrom|date:'Y-m-d' }}"></div>
   <div><label>To</label><input type="date" name="to" value="{{ dto|date:'Y-m-d' }}"></div>
   <div><label>Account code (prefix)</label><input type="text" name="code_prefix" placeholder="e.g. 1200" value="{{ code_prefix }}"></div>
-  {% if account_id %}<input type="hidden" name="account" value="{{ account_id }}">{% endif %}
   <div style="display:flex; gap:8px;">
     <button type="submit">Apply</button>
     <a class="button" href="{{ request.path }}">Clear</a>
-    <a class="button" target="_blank" rel="noopener" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}{% if account_id %}&account={{ account_id }}{% endif %}&format=csv">Export CSV</a>
-    <a class="button" target="_blank" rel="noopener" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}{% if account_id %}&account={{ account_id }}{% endif %}&format=xlsx">Export XLSX</a>
+    <a class="button" target="_blank" rel="noopener" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
+    <a class="button" target="_blank" rel="noopener" href="?from={{ dfrom|date:'Y-m-d' }}&to={{ dto|date:'Y-m-d' }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=xlsx">Export XLSX</a>
   </div>
 </form>
 
 <table style="width:100%; border-collapse:collapse;">
   <thead><tr>
-    <th style="text-align:left; padding:6px;">Date</th>
     <th style="text-align:left; padding:6px;">Code</th>
     <th style="text-align:left; padding:6px;">Name</th>
     <th style="text-align:right; padding:6px;">Debit</th>
     <th style="text-align:right; padding:6px;">Credit</th>
-    <th style="text-align:left; padding:6px;">Memo</th>
+    <th style="text-align:right; padding:6px;">Balance</th>
   </tr></thead>
   <tbody>
-    {% for r in lines %}
+    {% for r in rows %}
       <tr>
-        <td style="padding:6px;">{{ r.date }}</td>
         <td style="padding:6px;">{{ r.code }}</td>
         <td style="padding:6px;">{{ r.name }}</td>
         <td style="text-align:right; padding:6px;">{{ r.deb|floatformat:2 }}</td>
         <td style="text-align:right; padding:6px;">{{ r.cre|floatformat:2 }}</td>
-        <td style="padding:6px;">{{ r.memo }}</td>
+        <td style="text-align:right; padding:6px;">{{ r.bal|floatformat:2 }}</td>
       </tr>
     {% empty %}
-      <tr><td colspan="6" style="padding:6px;">No rows.</td></tr>
+      <tr><td colspan="5" style="padding:6px;">No rows.</td></tr>
     {% endfor %}
   </tbody>
+  <tfoot>
+    <tr>
+      <th colspan="2" style="text-align:right; padding:6px;">TOTALS</th>
+      <th style="text-align:right; padding:6px;">{{ total_deb|floatformat:2 }}</th>
+      <th style="text-align:right; padding:6px;">{{ total_cre|floatformat:2 }}</th>
+      <th style="text-align:right; padding:6px;">{{ total_bal|floatformat:2 }}</th>
+    </tr>
+    <tr><td colspan="5" style="padding:6px;">{% if balanced %}Balanced{% else %}Not balanced{% endif %}</td></tr>
+  </tfoot>
 </table>
 {% endblock %}
+
+
+
