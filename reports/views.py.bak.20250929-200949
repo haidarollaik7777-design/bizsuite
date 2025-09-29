@@ -1,4 +1,4 @@
-﻿from decimal import Decimal
+from decimal import Decimal
 from django.conf import settings
 from django.apps import apps as dj_apps
 from django.utils import timezone
@@ -121,7 +121,7 @@ def report_general_ledger(request):
         ac = getattr(ln, cfg["account"])
         memo = getattr(ln, "memo", "") or ""
         xrows.append([
-            (_get_attr_path(ln, cfg["date"]) or ln.entry.date).isoformat(),
+            getattr(ln, cfg["date"]).isoformat(),
             getattr(ac, "code", "") if ac else "",
             getattr(ac, "name", "") if ac else "",
             f"{Decimal(getattr(ln, cfg['debit']) or 0):.2f}",
@@ -240,36 +240,3 @@ def report_balance_sheet(request):
     ctx = dict(dfrom=dfrom, dto=dto, assets=assets, liabs=liabs, equity=equity,
                total_assets=total_assets, total_liabs=total_liabs, total_equity=total_equity)
     return render(request, "admin/accounting/reports/balance_sheet.html", ctx)
-def _get_attr_path(obj, path: str):
-    """
-    Safely follow an attribute path like "entry__date" or "entry.date"
-    on an instance. Returns None if any hop is missing.
-    """
-    cur = obj
-    for part in path.replace("__", ".").split("."):
-        if not part:
-            continue
-        cur = getattr(cur, part, None)
-        if cur is None:
-            return None
-    return cur
-
-from django.shortcuts import redirect
-from django.http import Http404
-
-def redirect_rc_slug(request, report_id: str):
-    mapping = {
-        "trial-balance": "trial-balance",
-        "general-ledger": "general-ledger",
-        "balance-sheet": "balance-sheet",
-        "income-statement": "income-statement",
-    }
-    slug = mapping.get(report_id)
-    if not slug:
-        raise Http404("Unknown report")
-    new = f"/admin/reports/{slug}/"
-    qs = request.META.get("QUERY_STRING")
-    if qs:
-        new += f"?{qs}"
-    return redirect(new)
-

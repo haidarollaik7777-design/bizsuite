@@ -253,23 +253,3 @@ def _get_attr_path(obj, path: str):
         if cur is None:
             return None
     return cur
-
-from django.shortcuts import redirect
-from django.http import Http404
-
-def redirect_rc_slug(request, report_id: str):
-    mapping = {
-        "trial-balance": "trial-balance",
-        "general-ledger": "general-ledger",
-        "balance-sheet": "balance-sheet",
-        "income-statement": "income-statement",
-    }
-    slug = mapping.get(report_id)
-    if not slug:
-        raise Http404("Unknown report")
-    new = f"/admin/reports/{slug}/"
-    qs = request.META.get("QUERY_STRING")
-    if qs:
-        new += f"?{qs}"
-    return redirect(new)
-
