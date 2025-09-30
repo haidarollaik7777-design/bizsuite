@@ -1,0 +1,23 @@
+from django.http import HttpResponse
+import csv
+from datetime import datetime
+
+def rows_to_csv_response(filename: str, headers: list[str], rows: list[list]):
+    resp = HttpResponse(content_type="text/csv")
+    safe = filename.replace(" ", "_").replace("/", "_")
+    resp["Content-Disposition"] = f'attachment; filename="{safe}.csv"'
+    writer = csv.writer(resp)
+    writer.writerow(headers)
+    for r in rows:
+        writer.writerow(r)
+    return resp
+
+def safe_date(val, default=None):
+    if not val:
+        return default
+    if isinstance(val, datetime):
+        return val.date()
+    try:
+        return datetime.fromisoformat(str(val)).date()
+    except Exception:
+        return default

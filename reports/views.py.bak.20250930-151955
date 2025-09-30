@@ -1,0 +1,270 @@
+from django.contrib.admin.views.decorators import staff_member_required
+from decimal import Decimal
+from django.conf import settings
+from django.apps import apps as dj_apps
+from django.utils import timezone
+from django.db.models import Sum, Value, DecimalField, F
+from django.db.models.functions import Coalesce
+from django.shortcuts import render
+from .utils.csv_export import rows_to_csv_response, safe_date
+from .utils.xlsx_export import rows_to_xlsx_response
+
+# ---- helpers ----
+
+def _posting_model_and_fields():
+    cfg = getattr(settings, "REPORTS_POSTING", {
+        "model": "ledger.Posting",
+        "date": "date",
+        "account": "account",
+        "debit": "debit",
+        "credit": "credit",
+    })
+    app_label, model_name = cfg["model"].split(".")
+    Model = dj_apps.get_model(app_label, model_name)
+    return Model, cfg
+
+def _is_csv(request):
+    return (request.GET.get("format") or "").lower() == "csv"
+
+def _want_xlsx(request):
+    return (request.GET.get("format") or "").lower() in ("xlsx","excel","xls","xlsx")
+
+def _date_range(request):
+    today = timezone.now().date()
+    dfrom = request.GET.get("from")
+    dto   = request.GET.get("to")
+    if not dfrom or not dto:
+        import calendar
+        dfrom = today.replace(day=1)
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        dto = today.replace(day=last_day)
+    else:
+        dfrom = safe_date(dfrom, today.replace(day=1))
+        dto   = safe_date(dto, today)
+    return dfrom, dto
+
+def _coalesce0(fieldname):
+    # Coalesce to Decimal(0) to avoid Integer/Decimal mixed-type errors.
+    return Coalesce(Sum(fieldname), Value(Decimal("0.00"), output_field=DecimalField(max_digits=18, decimal_places=2)))
+
+# ---- reports ----
+
+@staff_member_required
+
+def report_trial_balance(request):
+    Posting, cfg = _posting_model_and_fields()
+    dfrom, dto = _date_range(request)
+    code_prefix = (request.GET.get("code_prefix") or "").strip()
+
+    base = Posting.objects.filter(**{
+        f"{cfg['date']}__gte": dfrom,
+        f"{cfg['date']}__lte": dto,
+    })
+    if code_prefix:
+        base = base.filter(**{f"{cfg['account']}__code__startswith": code_prefix})
+
+    agg = (
+        base.values("account_id", "account__code", "account__name")
+            .annotate(
+                deb=_coalesce0(cfg["debit"]),
+                cre=_coalesce0(cfg["credit"]),
+            )
+            .order_by("account__code")
+    )
+    rows = list(agg)
+
+    total_deb = sum((r["deb"] or Decimal("0")) for r in rows)
+    total_cre = sum((r["cre"] or Decimal("0")) for r in rows)
+    total_bal = total_deb - total_cre
+    balanced = abs(total_bal) < Decimal("0.005")
+
+    # export rows
+    xrows = []
+    for r in rows:
+        deb = r["deb"] or Decimal("0")
+        cre = r["cre"] or Decimal("0")
+        xrows.append([
+            r.get("account__code") or "",
+            r.get("account__name") or "",
+            f"{deb:.2f}", f"{cre:.2f}", f"{(deb - cre):.2f}",
+        ])
+    headers = ["Code","Name","Debit","Credit","Balance"]
+
+    if _is_csv(request):
+        xrows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
+        return rows_to_csv_response(f"trial_balance_{dfrom}_to_{dto}", headers, xrows)
+    if _want_xlsx(request):
+        xrows.append(["TOTALS","", f"{total_deb:.2f}", f"{total_cre:.2f}", f"{total_bal:.2f}"])
+        return rows_to_xlsx_response(f"trial_balance_{dfrom}_to_{dto}", headers, xrows)
+
+    ctx = dict(
+        rows=rows, dfrom=dfrom, dto=dto, code_prefix=code_prefix,
+        total_deb=total_deb, total_cre=total_cre, total_bal=total_bal, balanced=balanced,
+    )
+    return render(request, "admin/accounting/reports/trial_balance.html", ctx)
+
+
+@staff_member_required
+
+
+
+    $body = $matches[1]
+    $body = $body -replace "q\s*=\s*q\.order_by\([^\)]*\)\.distinct\(\)", "q = q.order_by(""entry__date"",""entry_id"",""id"").distinct()"
+    $inject = @"
+    # UI row limit (no limit for export)
+    try:
+        limit = int(request.GET.get("limit") or 5000)
+    except Exception:
+        limit = 5000
+    is_export = _is_csv(request) or _want_xlsx(request)
+    if not is_export:
+        q = q[:limit]
+"@
+    "def report_general_ledger(request):`r`n    " + ($body.Trim() -replace "`r`n","\r\n    ") -replace "(\s*)# Build rows once for exports", $inject + "`r`n    # Build rows once for exports" + "`r`n" + "    " | Out-Null
+    return $matches[0] -replace [regex]::Escape($matches[1]), ($body -replace "(?s)\A", $inject)
+  
+
+
+@staff_member_required
+
+
+def report_income_statement(request):
+    # Minimal IS: Revenue (4xxx) vs Expenses (5xxx). Adjust if your chart differs.
+    Posting, cfg = _posting_model_and_fields()
+    dfrom, dto = _date_range(request)
+
+    base = Posting.objects.filter(**{
+        f"{cfg['date']}__gte": dfrom,
+        f"{cfg['date']}__lte": dto,
+    })
+
+    rev_q = (base.filter(**{f"{cfg['account']}__code__startswith": "4"})
+                  .values("account__code","account__name")
+                  .annotate(deb=_coalesce0(cfg["debit"]), cre=_coalesce0(cfg["credit"]))
+                  .order_by("account__code"))
+    exp_q = (base.filter(**{f"{cfg['account']}__code__startswith": "5"})
+                  .values("account__code","account__name")
+                  .annotate(deb=_coalesce0(cfg["debit"]), cre=_coalesce0(cfg["credit"]))
+                  .order_by("account__code"))
+
+    rev_rows = list(rev_q)
+    exp_rows = list(exp_q)
+
+    # amounts
+    for r in rev_rows:
+        r["amount"] = (r["cre"] or Decimal("0")) - (r["deb"] or Decimal("0"))
+    for r in exp_rows:
+        r["amount"] = (r["deb"] or Decimal("0")) - (r["cre"] or Decimal("0"))
+
+    total_rev = sum(r["amount"] for r in rev_rows)
+    total_exp = sum(r["amount"] for r in exp_rows)
+    net_income = total_rev - total_exp
+
+    # export
+    if _is_csv(request) or _want_xlsx(request):
+        headers = ["Section","Code","Name","Amount"]
+        rows = []
+        for r in rev_rows:
+            rows.append(["Revenue", r["account__code"] or "", r["account__name"] or "", f"{r['amount']:.2f}"])
+        rows.append(["","Total Revenue","", f"{total_rev:.2f}"])
+        for r in exp_rows:
+            rows.append(["Expenses", r["account__code"] or "", r["account__name"] or "", f"{r['amount']:.2f}"])
+        rows.append(["","Total Expenses","", f"{total_exp:.2f}"])
+        rows.append(["","Net Income","", f"{net_income:.2f}"])
+
+        if _is_csv(request):
+            return rows_to_csv_response(f"income_statement_{dfrom}_to_{dto}", headers, rows)
+        else:
+            return rows_to_xlsx_response(f"income_statement_{dfrom}_to_{dto}", headers, rows)
+
+    ctx = dict(dfrom=dfrom, dto=dto, rev_rows=rev_rows, exp_rows=exp_rows,
+               total_rev=total_rev, total_exp=total_exp, net_income=net_income)
+    return render(request, "admin/accounting/reports/income_statement.html", ctx)
+
+
+@staff_member_required
+
+
+def report_balance_sheet(request):
+    # Minimal BS: Assets (1xxx), Liabilities (2xxx), Equity (3xxx)
+    Posting, cfg = _posting_model_and_fields()
+    dfrom, dto = _date_range(request)
+
+    base = Posting.objects.filter(**{
+        f"{cfg['date']}__lte": dto,
+    })
+
+    def agg(prefix):
+        return (base.filter(**{f"{cfg['account']}__code__startswith": prefix})
+                    .values("account__code","account__name")
+                    .annotate(deb=_coalesce0(cfg["debit"]), cre=_coalesce0(cfg["credit"]))
+                    .order_by("account__code"))
+
+    assets = list(agg("1"))
+    liabs  = list(agg("2"))
+    equity = list(agg("3"))
+
+    for r in assets: r["amount"] = (r["deb"] or Decimal("0")) - (r["cre"] or Decimal("0"))
+    for r in liabs:  r["amount"] = (r["cre"] or Decimal("0")) - (r["deb"] or Decimal("0"))
+    for r in equity: r["amount"] = (r["cre"] or Decimal("0")) - (r["deb"] or Decimal("0"))
+
+    total_assets = sum(r["amount"] for r in assets)
+    total_liabs  = sum(r["amount"] for r in liabs)
+    total_equity = sum(r["amount"] for r in equity)
+
+    # export
+    if _is_csv(request) or _want_xlsx(request):
+        headers = ["Section","Code","Name","Amount"]
+        rows = []
+        for r in assets:
+            rows.append(["Assets", r["account__code"] or "", r["account__name"] or "", f"{r['amount']:.2f}"])
+        rows.append(["","Total Assets","", f"{total_assets:.2f}"])
+        for r in liabs:
+            rows.append(["Liabilities", r["account__code"] or "", r["account__name"] or "", f"{r['amount']:.2f}"])
+        rows.append(["","Total Liabilities","", f"{total_liabs:.2f}"])
+        for r in equity:
+            rows.append(["Equity", r["account__code"] or "", r["account__name"] or "", f"{r['amount']:.2f}"])
+        rows.append(["","Total Equity","", f"{total_equity:.2f}"])
+
+        if _is_csv(request):
+            return rows_to_csv_response(f"balance_sheet_as_of_{dto}", headers, rows)
+        else:
+            return rows_to_xlsx_response(f"balance_sheet_as_of_{dto}", headers, rows)
+
+    ctx = dict(dfrom=dfrom, dto=dto, assets=assets, liabs=liabs, equity=equity,
+               total_assets=total_assets, total_liabs=total_liabs, total_equity=total_equity)
+    return render(request, "admin/accounting/reports/balance_sheet.html", ctx)
+def _get_attr_path(obj, path: str):
+    """
+    Safely follow an attribute path like "entry__date" or "entry.date"
+    on an instance. Returns None if any hop is missing.
+    """
+    cur = obj
+    for part in path.replace("__", ".").split("."):
+        if not part:
+            continue
+        cur = getattr(cur, part, None)
+        if cur is None:
+            return None
+    return cur
+
+from django.shortcuts import redirect
+from django.http import Http404
+
+def redirect_rc_slug(request, report_id: str):
+    mapping = {
+        "trial-balance": "trial-balance",
+        "general-ledger": "general-ledger",
+        "balance-sheet": "balance-sheet",
+        "income-statement": "income-statement",
+    }
+    slug = mapping.get(report_id)
+    if not slug:
+        raise Http404("Unknown report")
+    new = f"/admin/reports/{slug}/"
+    qs = request.META.get("QUERY_STRING")
+    if qs:
+        new += f"?{qs}"
+    return redirect(new)
+
+

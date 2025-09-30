@@ -1,4 +1,4 @@
-﻿{% extends "admin/base_site.html" %}
+{% extends "admin/base_site.html" %}
 {% block content %}
 <h1>General Ledger</h1>
 <form method="get" style="display:flex;gap:8px;align-items:end;margin:10px 0;">
@@ -20,7 +20,7 @@
   <tbody>
     {% for ln in lines %}
       <tr>
-        <td>{{ ln.entry.date|date:"Y-m-d" }}</td>
+        <td>{{ ln.date|default:ln.created|date:"Y-m-d" }}</td>
         <td>{{ ln.account.code }}</td>
         <td>{{ ln.account.name }}</td>
         <td style="text-align:right;">{{ ln.debit|floatformat:2 }}</td>
@@ -33,7 +33,3 @@
   </tbody>
 </table>
 {% endblock %}
-
-
-
-

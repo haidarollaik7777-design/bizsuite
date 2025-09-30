@@ -1,38 +1,19 @@
-﻿from django.http import HttpResponse
+from io import BytesIO
+from django.http import HttpResponse
 from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
 
-def rows_to_xlsx_response(filename: str, headers: list[str], rows: list[list]):
+def rows_to_xlsx_response(filename: str, headers, rows):
     wb = Workbook()
-    .freeze_panes = "A2"
-    ws.title = "Report"
-    ws.append(headers)
+    ws = wb.active
+    if headers:
+        ws.append(list(headers))
     for r in rows:
-        ws.append(r)
-    for col_idx, _ in enumerate(headers, start=1):
-        max_len = 0
-        for row in ws.iter_rows(min_col=col_idx, max_col=col_idx):
-            val = row[0].value
-            if val is None:
-                continue
-            max_len = max(max_len, len(str(val)))
-        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
-    resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    safe = filename.replace(" ", "_").replace("/", "_")
-    resp["Content-Disposition"] = f'attachment; filename="{safe}.xlsx"'
-    wb.save(resp)
-    "
-    # add simple money formatting
-    try:
-        from openpyxl.utils import get_column_letter
-        if headers:
-            money_headers = {"debit","credit","balance","amount","total","net income"}
-            for idx, h in enumerate(headers, start=1):
-                if str(h).strip().lower() in money_headers:
-                    for cell in ws[get_column_letter(idx)]:
-                        if isinstance(cell.value, (int, float)):
-                            cell.number_format = "#,##0.00"
-    except Exception:
-        pass
-    return resp"
-
+        ws.append(list(r))
+    bio = BytesIO()
+    wb.save(bio)
+    resp = HttpResponse(
+        bio.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{filename}.xlsx"'
+    return resp

@@ -1,11 +1,11 @@
-{% extends "admin/base_site.html" %}
+﻿{% extends "admin/base_site.html" %}
 {% block content %}
 <h1>Trial Balance</h1>
-<form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:12px 0;">
+<form method="get" style="display:flex;gap:8px;align-items:end;margin:10px 0;">
   <div><label>From</label><input type="date" name="from" value="{{ dfrom|date:'Y-m-d' }}"></div>
   <div><label>To</label><input type="date" name="to" value="{{ dto|date:'Y-m-d' }}"></div>
-  <div><label>Account code (prefix)</label><input name="code_prefix" value="{{ code_prefix }}" placeholder="e.g. 1200"></div>
-  <div style="display:flex; gap:8px;">
+  <div><label>Account code (prefix)</label><input name="code_prefix" value="{{ code_prefix }}"></div>
+  <div style="display:flex;gap:6px;">
     <button type="submit">Apply</button>
     <a class="button" href="{{ request.path }}">Clear</a>
     <a class="button" href="?from={{ dfrom }}&to={{ dto }}{% if code_prefix %}&code_prefix={{ code_prefix }}{% endif %}&format=csv">Export CSV</a>
@@ -13,35 +13,31 @@
   </div>
 </form>
 
-<table style="width:100%; border-collapse:collapse;">
+<table style="width:100%;border-collapse:collapse;">
   <thead><tr>
-    <th style="text-align:left; padding:6px;">Code</th>
-    <th style="text-align:left; padding:6px;">Name</th>
-    <th style="text-align:right; padding:6px;">Debit</th>
-    <th style="text-align:right; padding:6px;">Credit</th>
-    <th style="text-align:right; padding:6px;">Balance</th>
+    <th>Code</th><th>Name</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Balance</th>
   </tr></thead>
   <tbody>
     {% for r in rows %}
       <tr>
-        <td style="padding:6px;">{{ r.account__code }}</td>
-        <td style="padding:6px;">{{ r.account__name }}</td>
-        <td style="text-align:right; padding:6px;">{{ r.deb|floatformat:2 }}</td>
-        <td style="text-align:right; padding:6px;">{{ r.cre|floatformat:2 }}</td>
-        <td style="text-align:right; padding:6px;">{{ r.deb|floatformat:2|default:"0.00" }}{% comment %}balance shown from export; here omit arithmetic{% endcomment %}</td>
+        <td>{{ r.account__code }}</td>
+        <td>{{ r.account__name }}</td>
+        <td style="text-align:right;">{{ r.deb|floatformat:2 }}</td>
+        <td style="text-align:right;">{{ r.cre|floatformat:2 }}</td>
+        <td style="text-align:right;">{{ r.deb|add:r.cre|floatformat:2|add:"-2"|floatformat:2 }}</td>
       </tr>
     {% empty %}
-      <tr><td colspan="5" style="padding:6px;">No rows.</td></tr>
+      <tr><td colspan="5">No rows.</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>
     <tr>
-      <th colspan="2" style="text-align:right; padding:6px;">TOTALS</th>
-      <th style="text-align:right; padding:6px;">{{ total_deb|floatformat:2 }}</th>
-      <th style="text-align:right; padding:6px;">{{ total_cre|floatformat:2 }}</th>
-      <th style="text-align:right; padding:6px;">{{ total_bal|floatformat:2 }}</th>
+      <th colspan="2" style="text-align:right;">TOTALS</th>
+      <th style="text-align:right;">{{ total_deb|floatformat:2 }}</th>
+      <th style="text-align:right;">{{ total_cre|floatformat:2 }}</th>
+      <th style="text-align:right;">{{ total_deb|sub:total_cre|floatformat:2 }}</th>
     </tr>
-    <tr><td colspan="5" style="padding:6px;">{% if balanced %}Balanced{% else %}Not balanced{% endif %}</td></tr>
+    <tr><td colspan="5">{% if balanced %}Balanced{% else %}Not balanced{% endif %}</td></tr>
   </tfoot>
 </table>
 {% endblock %}

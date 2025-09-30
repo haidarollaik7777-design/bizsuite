@@ -20,7 +20,7 @@
   <tbody>
     {% for ln in lines %}
       <tr>
-        <td>{{ ln.entry.date|date:"Y-m-d" }}</td>
+        <td>{{ ln.date|default:ln.created|date:"Y-m-d" }}</td>
         <td>{{ ln.account.code }}</td>
         <td>{{ ln.account.name }}</td>
         <td style="text-align:right;">{{ ln.debit|floatformat:2 }}</td>
@@ -33,7 +33,4 @@
   </tbody>
 </table>
 {% endblock %}
-
-
-
 

@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Balance Sheet</h1>
+<form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:12px 0;">
+  <div><label>As of</label><input type="date" name="to" value="{{ dto|date:'Y-m-d' }}"></div>
+  <div style="display:flex; gap:8px;">
+    <button type="submit">Apply</button>
+    <a class="button" href="{{ request.path }}">Clear</a>
+    <a class="button" href="?to={{ dto }}&format=csv">Export CSV</a>
+    <a class="button" href="?to={{ dto }}&format=xlsx">Export XLSX</a>
+  </div>
+</form>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+  <div>
+    <h3>Assets</h3>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead><tr><th>Code</th><th>Name</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody>
+        {% for r in assets %}
+          <tr><td>{{ r.account__code }}</td><td>{{ r.account__name }}</td><td style="text-align:right;">{{ r.amount|floatformat:2 }}</td></tr>
+        {% empty %}<tr><td colspan="3">No rows</td></tr>{% endfor %}
+      </tbody>
+      <tfoot><tr><th colspan="2" style="text-align:right;">Total Assets</th><th style="text-align:right;">{{ total_assets|floatformat:2 }}</th></tr></tfoot>
+    </table>
+  </div>
+  <div>
+    <h3>Liabilities & Equity</h3>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead><tr><th>Code</th><th>Name</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody>
+        {% for r in liabs %}
+          <tr><td>{{ r.account__code }}</td><td>{{ r.account__name }}</td><td style="text-align:right;">{{ r.amount|floatformat:2 }}</td></tr>
+        {% empty %}<tr><td colspan="3">No liabilities</td></tr>{% endfor %}
+        {% for r in equity %}
+          <tr><td>{{ r.account__code }}</td><td>{{ r.account__name }}</td><td style="text-align:right;">{{ r.amount|floatformat:2 }}</td></tr>
+        {% empty %}{% endfor %}
+      </tbody>
+      <tfoot><tr><th colspan="2" style="text-align:right;">Total Liabilities + Equity</th><th style="text-align:right;">{{ total_liabs|add:total_equity|floatformat:2 }}</th></tr></tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

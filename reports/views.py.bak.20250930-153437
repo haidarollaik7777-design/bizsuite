@@ -106,7 +106,7 @@ def report_general_ledger(request):
     # export rows
     rows = []
     for x in qs:
-        dt = deep_getattr(x, date_f)
+        dt = getattr(x, date_f)
         acct = getattr(x, acct_f, None)
         debit = getattr(x, deb_f, None) or Decimal("0.00")
         credit = getattr(x, cre_f, None) or Decimal("0.00")
@@ -241,16 +241,3 @@ def redirect_rc_slug(request, report_id: str):
     if qs:
         url = f"{url}?{qs}"
     return HttpResponseRedirect(url)
-def deep_getattr(obj, path, default=None):
-    """
-    getattr that supports Django-style '__' paths, e.g. 'entry__date'.
-    """
-    cur = obj
-    for part in path.split('__'):
-        if cur is None:
-            return default
-        try:
-            cur = getattr(cur, part)
-        except AttributeError:
-            return default
-    return cur

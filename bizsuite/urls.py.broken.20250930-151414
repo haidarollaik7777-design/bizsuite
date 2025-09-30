@@ -1,4 +1,4 @@
-﻿from reports import views as report_views
+from reports import views as report_views
 from django.views.generic import RedirectView
 from django.urls import path, include
 from django.contrib import admin
@@ -458,11 +458,3 @@ urlpatterns += [
 ]
 
 
-
-# --- FRIENDLY REPORT SHORTCUTS (root -> admin RC) ---
-urlpatterns += [
-    path("trial-balance/",    RedirectView.as_view(url="/admin/rc/trial-balance/",     permanent=False)),
-    path("general-ledger/",   RedirectView.as_view(url="/admin/rc/general-ledger/",    permanent=False)),
-    path("balance-sheet/",    RedirectView.as_view(url="/admin/rc/balance-sheet/",     permanent=False)),
-    path("income-statement/", RedirectView.as_view(url="/admin/rc/income-statement/",  permanent=False)),
-]
