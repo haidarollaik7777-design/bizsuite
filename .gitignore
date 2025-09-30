@@ -25,3 +25,6 @@ venv/
 .venv/
 **/venv/
 **/.venv/
+
+/bak/
+
