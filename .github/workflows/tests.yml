@@ -25,3 +25,4 @@ jobs:
           DJANGO_SETTINGS_MODULE: bizsuite.settings
         run: python manage.py test -v 2 --failfast
 
+
