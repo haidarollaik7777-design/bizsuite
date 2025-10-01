@@ -23,4 +23,5 @@ jobs:
       - name: Run reports tests (smoke)
         env:
           DJANGO_SETTINGS_MODULE: bizsuite.settings
-        run: python manage.py test reports.tests -v 2
+        run: python manage.py test -v 2 --failfast
+
