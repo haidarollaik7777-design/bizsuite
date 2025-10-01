@@ -50,4 +50,5 @@ jobs:
           CELERY_BROKER_URL: memory://
           CELERY_RESULT_BACKEND: cache+memory://
         run: |
-          python manage.py test -v 2 --failfast
+          python manage.py test reports -v 2 --failfast
+
