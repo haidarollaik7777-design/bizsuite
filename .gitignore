@@ -42,3 +42,7 @@ reports/bak.*
 reports/*/bak
 reports/*/bak.*
 
+reports/bak*/
+reports/bak.py
+reports/**/*.bak*/
+reports/**/backup*/
