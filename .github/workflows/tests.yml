@@ -28,3 +28,15 @@ jobs:
         run: |
           python manage.py test -v 2 --failfast
 
+      - name: Sanity: where is the app and which tests?
+        run: |
+          python - <<'PY'
+          import importlib, pkgutil, os
+          m = importlib.import_module('reports')
+          print('reports.__file__ =', getattr(m,'__file__',None))
+          print('reports.__path__ =', getattr(m,'__path__',None))
+          tests_dir = os.path.join(os.getcwd(), 'reports', 'tests')
+          print('exists reports/tests?', os.path.isdir(tests_dir))
+          if os.path.isdir(tests_dir):
+              print('test files:', [f for f in os.listdir(tests_dir) if f.startswith('test') and f.endswith('.py')])
+          PY
