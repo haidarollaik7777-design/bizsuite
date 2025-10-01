@@ -1,4 +1,4 @@
-﻿name: Django tests
+name: Django tests
 on:
   push:
     branches: [ stable-reports ]
@@ -23,6 +23,7 @@ jobs:
       - name: Run reports tests (smoke)
         env:
           DJANGO_SETTINGS_MODULE: bizsuite.settings
-        run: python manage.py test -v 2 --failfast
+        run: python manage.py test -v 2 --failfast-v 2 --failfast
+
 
 
