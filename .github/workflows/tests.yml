@@ -8,7 +8,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
     env:
       DJANGO_SETTINGS_MODULE: bizsuite.settings
 
@@ -26,14 +29,7 @@ jobs:
 
       - name: Show env
         run: |
-          python - << 'PY'
-          import sys, os, platform
-          print("Python:", sys.version)
-          print("Exe:", sys.executable)
-          print("Platform:", platform.platform())
-          print("CWD:", os.getcwd())
-          print("DJANGO_SETTINGS_MODULE:", os.environ.get("DJANGO_SETTINGS_MODULE"))
-          PY
+          python -c "import sys,os,platform;print('Python:',sys.version);print('Exe:',sys.executable);print('Platform:',platform.platform());print('CWD:',os.getcwd());print('DJANGO_SETTINGS_MODULE:',os.environ.get('DJANGO_SETTINGS_MODULE'))"
 
       - name: Run tests
         run: |
