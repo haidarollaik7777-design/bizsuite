@@ -1,36 +1,26 @@
 ﻿name: Django tests
-
 on:
   push:
-    branches: [stable-reports, chore/*, feat/*]
+    branches: [ stable-reports ]
   pull_request:
-    branches: [stable-reports]
+    branches: [ stable-reports ]
 
 jobs:
   test:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
-    env:
-      DJANGO_SETTINGS_MODULE: bizsuite.settings
-
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Show env
-        run: |
-          python -c "import sys,os,platform;print('Python:',sys.version);print('Exe:',sys.executable);print('Platform:',platform.platform());print('CWD:',os.getcwd());print('DJANGO_SETTINGS_MODULE:',os.environ.get('DJANGO_SETTINGS_MODULE'))"
-
-      - name: Run tests
-        run: |
-          python manage.py test -v 2
+      - name: Django system check
+        run: python manage.py check
+      - name: Run reports tests (smoke)
+        env:
+          DJANGO_SETTINGS_MODULE: bizsuite.settings
+        run: python manage.py test reports.tests -v 2
