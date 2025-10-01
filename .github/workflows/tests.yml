@@ -8,11 +8,10 @@ on:
 
 jobs:
   test:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     env:
       DJANGO_SETTINGS_MODULE: bizsuite.settings
-      PYTHONHASHSEED: '0'
-      TZ: Asia/Beirut
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,16 +24,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Show environment
+      - name: Show env
         run: |
           python - << 'PY'
           import sys, os, platform
           print("Python:", sys.version)
           print("Exe:", sys.executable)
+          print("Platform:", platform.platform())
           print("CWD:", os.getcwd())
-          print("sys.path:", sys.path)
+          print("DJANGO_SETTINGS_MODULE:", os.environ.get("DJANGO_SETTINGS_MODULE"))
           PY
 
-      - name: Run smoke tests (admin reports)
+      - name: Run tests
         run: |
-          python manage.py test reports.tests.test_admin_reports -v 3
+          python manage.py test -v 2
