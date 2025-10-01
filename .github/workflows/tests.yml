@@ -1,42 +1,53 @@
 ﻿name: Django tests
+
 on:
   push:
-    branches: [ stable-reports, chore/** ]
+    branches:
+      - stable-reports
+      - chore/**
   pull_request:
-    branches: [ stable-reports ]
+    branches:
+      - stable-reports
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      DJANGO_SETTINGS_MODULE: bizsuite.settings
-      PYTHONUNBUFFERED: "1"
-      CELERY_BROKER_URL: memory://
-      CELERY_RESULT_BACKEND: cache+memory://
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install dependencies
+
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Django check
-        run: python manage.py check -v 2
-      - name:       - name: Run Django tests (full)
-        run: |
-          python manage.py test -v 2 --failfast
 
-      - name: Sanity: where is the app and which tests?
+      - name: Show Python/Django
+        env:
+          DJANGO_SETTINGS_MODULE: bizsuite.settings
         run: |
           python - <<'PY'
-          import importlib, pkgutil, os
-          m = importlib.import_module('reports')
-          print('reports.__file__ =', getattr(m,'__file__',None))
-          print('reports.__path__ =', getattr(m,'__path__',None))
-          tests_dir = os.path.join(os.getcwd(), 'reports', 'tests')
-          print('exists reports/tests?', os.path.isdir(tests_dir))
-          if os.path.isdir(tests_dir):
-              print('test files:', [f for f in os.listdir(tests_dir) if f.startswith('test') and f.endswith('.py')])
+          import sys, os, django
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE','bizsuite.settings')
+          django.setup()
+          from django.conf import settings
+          print("Python:", sys.version)
+          print("Django:", django.get_version())
+          print("DB ENGINE:", settings.DATABASES['default']['ENGINE'])
           PY
+
+      - name: Run Django tests
+        env:
+          DJANGO_SETTINGS_MODULE: bizsuite.settings
+          PYTHONUNBUFFERED: "1"
+          TZ: UTC
+          CELERY_BROKER_URL: memory://
+          CELERY_RESULT_BACKEND: cache+memory://
+        run: |
+          python manage.py test -v 2 --failfast
