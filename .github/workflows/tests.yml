@@ -49,3 +49,4 @@ jobs:
 
       - name: Run full test suite
         run: python manage.py test -v 2 --failfast
+
