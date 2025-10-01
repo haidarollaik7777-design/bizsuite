@@ -27,8 +27,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Show Python/Django and settings
+        run: |
+          python - <<'PY'
+          import sys, os, json
+          print("Python:", sys.version)
+          print("CWD:", os.getcwd())
+          import django
+          django.setup()
+          from django.conf import settings
+          print("Django:", django.get_version())
+          print("DB ENGINE:", settings.DATABASES["default"]["ENGINE"])
+          print("INSTALLED_APPS count:", len(settings.INSTALLED_APPS))
+          PY
+
       - name: Django check
         run: python manage.py check -v 2
 
-      - name: Run tests
+      - name: Run reports tests (smoke)
+        run: python manage.py test reports.tests -v 2 --failfast
+
+      - name: Run full test suite
         run: python manage.py test -v 2 --failfast
