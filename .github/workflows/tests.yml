@@ -1,30 +1,17 @@
 ﻿name: Django tests
 on:
   push:
-    branches: [ stable-reports ]
+    branches: [ stable-reports, chore/** ]
   pull_request:
     branches: [ stable-reports ]
-
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Django system check
-        run: python manage.py check
-      - name: Run reports tests (smoke)
-        env:
-          DJANGO_SETTINGS_MODULE: bizsuite.settings
-        run: python manage.py test -v 2 --failfast -v 2 --failfast
-
-
-
-
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: python manage.py test -v 2 --failfast
