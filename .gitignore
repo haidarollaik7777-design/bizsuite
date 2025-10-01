@@ -28,3 +28,10 @@ venv/
 
 /bak/
 
+
+# ignore report backup dirs
+reports/bak
+reports/bak.*
+reports/**/bak
+reports/**/bak.*
+
