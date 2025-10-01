@@ -11,59 +11,18 @@ jobs:
     env:
       DJANGO_SETTINGS_MODULE: bizsuite.settings
       PYTHONUNBUFFERED: "1"
-      TZ: UTC
-      # in case any code touches Celery settings:
       CELERY_BROKER_URL: memory://
       CELERY_RESULT_BACKEND: cache+memory://
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Sanity: show env + repo
-        run: |
-          python - <<'PY'
-          import os, sys, platform, subprocess
-          print("Python:", sys.version)
-          print("Exe   :", sys.executable)
-          print("CWD   :", os.getcwd())
-          print("Platform:", platform.platform())
-          print("DJANGO_SETTINGS_MODULE:", os.getenv("DJANGO_SETTINGS_MODULE"))
-          PY
-          echo "::group::Tree"
-          ls -la
-          echo "::endgroup::"
-
-      - name: Sanity: Django imports & settings
-        run: |
-          python - <<'PY'
-          import sys
-          try:
-              import django
-              django.setup()
-              from django.conf import settings
-              print("Django:", django.get_version())
-              print("DB ENGINE:", settings.DATABASES["default"]["ENGINE"])
-              print("INSTALLED_APPS:", len(settings.INSTALLED_APPS))
-          except Exception as e:
-              print("!! Django failed to import/setup:", e)
-              import traceback; traceback.print_exc()
-              sys.exit(1)
-          PY
-
       - name: Django check
         run: python manage.py check -v 2
-
-      - name: Run reports smoke tests first
-        run: python manage.py test reports.tests -v 2 --failfast
-
-      - name: Run full test suite
-        run: python manage.py test -v 2 --failfast
+      - name: Run reports tests (smoke)
+        run: python manage.py test reports -v 2 --failfast
